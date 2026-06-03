@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { requireAuth } from '@/lib/auth/guards';
 import { logoutAction } from '@/actions/auth.actions';
 
@@ -23,26 +24,49 @@ export default async function ProtectedLayout({
       <header className="bg-ucc-green text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Left: Portal title with logo */}
-            <div className="flex items-center gap-3">
-              <Image
-                src="/images/logo-ucc.jpeg"
-                alt="Logo UCC"
-                width={36}
-                height={36}
-                className="rounded-sm bg-white p-0.5"
-              />
-              <h1 className="text-lg font-semibold tracking-tight">
-                Portal Gestión de Comités
-              </h1>
+            {/* Left: Portal title with logo + nav links */}
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <Image
+                  src="/images/logo-ucc.jpeg"
+                  alt="Logo UCC"
+                  width={36}
+                  height={36}
+                  className="rounded-sm bg-white p-0.5"
+                />
+                <span className="text-lg font-semibold tracking-tight hidden md:inline">
+                  Portal Gestión de Comités
+                </span>
+              </Link>
+              {/* Navigation links */}
+              <nav className="hidden sm:flex items-center gap-1 ml-4">
+                <Link href="/dashboard" className="px-3 py-1.5 text-sm font-medium rounded-md hover:bg-white/10 transition-colors">
+                  Inicio
+                </Link>
+                <Link href="/actas" className="px-3 py-1.5 text-sm font-medium rounded-md hover:bg-white/10 transition-colors">
+                  Actas
+                </Link>
+                {session.rol === 'Administrador' && (
+                  <Link href="/admin/usuarios" className="px-3 py-1.5 text-sm font-medium rounded-md hover:bg-white/10 transition-colors">
+                    Admin
+                  </Link>
+                )}
+              </nav>
             </div>
 
-            {/* Right: User info + Logout */}
+            {/* Right: User info + Online indicator + Logout */}
             <div className="flex items-center gap-4">
-              {/* User name */}
-              <span className="text-sm font-medium hidden sm:inline">
-                {session.nombreCompleto}
-              </span>
+              {/* Online indicator + User name */}
+              <div className="flex items-center gap-2 hidden sm:flex">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                </span>
+                <span className="text-sm font-medium">
+                  {session.nombreCompleto}
+                </span>
+                <span className="text-xs text-green-200">En línea</span>
+              </div>
 
               {/* Role badge */}
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white border border-white/30">

@@ -20,7 +20,13 @@ export default async function AdminUsuariosPage() {
 
   // Fetch initial user list (page 1)
   const result = await listUsers(1);
-  const initialData = result.data!;
+  const initialData = result.success && result.data ? result.data : {
+    users: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 0,
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
