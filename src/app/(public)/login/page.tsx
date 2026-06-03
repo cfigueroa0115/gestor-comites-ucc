@@ -18,7 +18,7 @@ export const metadata = {
  */
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ucc-gray px-4 py-8">
+    <main className="flex min-h-screen items-center justify-center bg-ucc-gray px-4 py-8 bg-digital-pattern bg-digital-dots">
       <div className="w-full max-w-md">
         {/* Card Container */}
         <div className="rounded-2xl bg-white p-8 shadow-card sm:p-10">

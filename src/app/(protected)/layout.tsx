@@ -18,7 +18,7 @@ export default async function ProtectedLayout({
   const session = await requireAuth();
 
   return (
-    <div className="min-h-screen flex flex-col bg-ucc-gray">
+    <div className="min-h-screen flex flex-col bg-ucc-gray bg-digital-pattern bg-digital-dots">
       {/* Navigation Header */}
       <header className="bg-ucc-green text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

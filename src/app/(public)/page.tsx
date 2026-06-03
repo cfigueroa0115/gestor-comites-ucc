@@ -3,7 +3,7 @@ import Image from "next/image";
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white bg-digital-pattern bg-digital-dots">
       {/* Header */}
       <header className="w-full bg-ucc-green py-4 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl flex items-center gap-3">

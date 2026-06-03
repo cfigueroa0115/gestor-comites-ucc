@@ -29,3 +29,63 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* =========================================================================
+   Digital Transformation Background Pattern
+   Subtle circuit-board / network lines in light gray.
+   Applied globally for a modern, tech-inspired feel.
+   ========================================================================= */
+
+.bg-digital-pattern {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-digital-pattern::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.4;
+  pointer-events: none;
+  background-image:
+    /* Diagonal grid lines */
+    linear-gradient(135deg, transparent 48%, #e2e8f0 48%, #e2e8f0 49%, transparent 49%),
+    linear-gradient(45deg, transparent 48%, #e2e8f0 48%, #e2e8f0 49%, transparent 49%),
+    /* Horizontal subtle lines */
+    repeating-linear-gradient(0deg, transparent, transparent 80px, #f1f5f9 80px, #f1f5f9 81px),
+    /* Vertical subtle lines */
+    repeating-linear-gradient(90deg, transparent, transparent 80px, #f1f5f9 80px, #f1f5f9 81px);
+  background-size: 60px 60px, 60px 60px, 80px 80px, 80px 80px;
+}
+
+.bg-digital-pattern > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Animated floating dots for extra digital feel */
+.bg-digital-dots {
+  position: relative;
+  overflow: hidden;
+}
+
+.bg-digital-dots::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.15;
+  background-image:
+    radial-gradient(circle, #94a3b8 1px, transparent 1px),
+    radial-gradient(circle, #cbd5e1 0.5px, transparent 0.5px);
+  background-size: 40px 40px, 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+.bg-digital-dots > * {
+  position: relative;
+  z-index: 1;
+}
+
