@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { LoginForm } from '@/components/forms/LoginForm';
 
 export const metadata = {
@@ -23,22 +24,14 @@ export default function LoginPage() {
         <div className="rounded-2xl bg-white p-8 shadow-card sm:p-10">
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-ucc-green-light">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-8 w-8 text-ucc-green"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
+            <div className="mx-auto mb-4">
+              <Image
+                src="/images/logo-ucc.jpeg"
+                alt="Logo Universidad Cooperativa de Colombia"
+                width={80}
+                height={80}
+                className="mx-auto rounded-lg"
+              />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">
               Iniciar Sesión

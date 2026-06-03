@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { requireAuth } from '@/lib/auth/guards';
 import { logoutAction } from '@/actions/auth.actions';
 
@@ -22,8 +23,15 @@ export default async function ProtectedLayout({
       <header className="bg-ucc-green text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Left: Portal title */}
+            {/* Left: Portal title with logo */}
             <div className="flex items-center gap-3">
+              <Image
+                src="/images/logo-ucc.jpeg"
+                alt="Logo UCC"
+                width={36}
+                height={36}
+                className="rounded-sm bg-white p-0.5"
+              />
               <h1 className="text-lg font-semibold tracking-tight">
                 Portal Gestión de Comités
               </h1>

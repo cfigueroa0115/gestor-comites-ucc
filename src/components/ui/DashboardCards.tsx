@@ -170,6 +170,12 @@ export function DashboardCards({ userRole }: DashboardCardsProps) {
           aria-labelledby="modal-title"
         >
           <div className="bg-white rounded-institutional p-8 shadow-card-hover max-w-sm w-full mx-4 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/logo-ucc.jpeg"
+              alt="Logo UCC"
+              className="mx-auto mb-4 w-16 h-16 rounded-lg"
+            />
             <h2
               id="modal-title"
               className="text-xl font-semibold text-gray-900 mb-4"

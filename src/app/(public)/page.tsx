@@ -1,11 +1,19 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-white">
       {/* Header */}
       <header className="w-full bg-ucc-green py-4 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-7xl flex items-center gap-3">
+          <Image
+            src="/images/logo-ucc.jpeg"
+            alt="Logo Universidad Cooperativa de Colombia"
+            width={40}
+            height={40}
+            className="rounded-sm bg-white p-0.5"
+          />
           <span className="text-sm font-medium text-white sm:text-base">
             Universidad Cooperativa de Colombia
           </span>
@@ -15,11 +23,17 @@ export default function LandingPage() {
       {/* Main Content */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-24">
         <div className="mx-auto w-full max-w-3xl text-center">
-          {/* Green accent line */}
-          <div
-            className="mx-auto mb-6 h-1 w-16 rounded bg-ucc-green"
-            aria-hidden="true"
-          />
+          {/* UCC Logo - Large */}
+          <div className="mx-auto mb-8">
+            <Image
+              src="/images/logo-ucc.jpeg"
+              alt="Logo Universidad Cooperativa de Colombia"
+              width={180}
+              height={180}
+              className="mx-auto rounded-lg shadow-card"
+              priority
+            />
+          </div>
 
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl lg:text-5xl">
             Portal Gestión de Comités
