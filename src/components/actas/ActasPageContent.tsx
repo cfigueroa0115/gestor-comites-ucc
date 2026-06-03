@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition, useCallback } from 'react';
 import { ActaTable } from '@/components/actas/ActaTable';
 import { ActaFormModal } from '@/components/actas/ActaFormModal';
+import { listActasAction } from '@/actions/acta.actions';
 import { ROLE_PERMISSIONS } from '@/lib/utils/constants';
 import type { PaginatedActas } from '@/lib/services/acta.service';
 import type { Rol } from '@/types';
@@ -16,14 +17,27 @@ interface ActasPageContentProps {
 /**
  * ActasPageContent – Client wrapper that includes the page header,
  * "+ Nueva Acta" button, form modal, and the ActaTable.
+ * Auto-refreshes the table after successful acta creation.
  */
 export function ActasPageContent({ initialData, userRole, userNombreCompleto }: ActasPageContentProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [tableData, setTableData] = useState<PaginatedActas>(initialData);
+  const [isPending, startTransition] = useTransition();
   const permissions = ROLE_PERMISSIONS[userRole];
 
+  const refreshTable = useCallback(() => {
+    startTransition(async () => {
+      const result = await listActasAction({}, 1);
+      if (result.success && result.data) {
+        setTableData(result.data);
+      }
+    });
+  }, []);
+
   function handleSuccess() {
-    setRefreshKey((k) => k + 1);
+    setModalOpen(false);
+    // Auto-refresh the table with fresh data from the server
+    refreshTable();
   }
 
   return (
@@ -55,10 +69,20 @@ export function ActasPageContent({ initialData, userRole, userNombreCompleto }: 
         )}
       </div>
 
-      {/* Acta Table */}
+      {/* Success notification */}
+      {isPending && (
+        <div className="mb-4 rounded-lg p-3 text-sm font-medium border border-green-300 bg-green-50 text-green-800 flex items-center gap-2">
+          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Actualizando tabla de actas...
+        </div>
+      )}
+
+      {/* Acta Table — receives live data */}
       <ActaTable
-        key={refreshKey}
-        initialData={initialData}
+        initialData={tableData}
         userRole={userRole}
       />
 

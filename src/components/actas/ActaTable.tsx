@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { listActasAction } from '@/actions/acta.actions';
 import type { PaginatedActas, ActaWithElaboradoPor } from '@/lib/services/acta.service';
@@ -39,6 +39,11 @@ export function ActaTable({ initialData, userRole }: ActaTableProps) {
   const [data, setData] = useState<PaginatedActas>(initialData);
   const [isPending, startTransition] = useTransition();
   const [detailActa, setDetailActa] = useState<ActaWithElaboradoPor | null>(null);
+
+  // Sync with parent when initialData changes (e.g., after new acta creation)
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
 
   const permissions = ROLE_PERMISSIONS[userRole];
 
