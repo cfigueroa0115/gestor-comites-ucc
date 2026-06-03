@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback } from 'react';
 import { AttendeesTable, type Attendee, type AttendeesErrors } from '@/components/forms/AttendeesTable';
+import { AttachmentManager } from '@/components/actas/AttachmentManager';
 import { actaFormSchema, TIPO_COMITE_OPTIONS, AREA_PROGRAMA_OPTIONS } from '@/lib/validations/acta.schema';
 import { createActaAction } from '@/actions/acta.actions';
 
@@ -105,6 +106,7 @@ function ActaFormModalInner({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [attendeesErrors, setAttendeesErrors] = useState<AttendeesErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [uploadInProgress, setUploadInProgress] = useState(false);
 
   /**
    * Client-side validation. Returns true if all fields are valid.
@@ -410,6 +412,11 @@ function ActaFormModalInner({
             />
           </div>
 
+          {/* Archivos Adjuntos (Soportes) */}
+          <div className="space-y-1">
+            <AttachmentManager onUploadStatusChange={setUploadInProgress} />
+          </div>
+
           {/* Proyectó */}
           <div className="space-y-1">
             <label htmlFor="proyecto" className="block text-sm font-semibold text-gray-700">
@@ -497,7 +504,7 @@ function ActaFormModalInner({
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || uploadInProgress}
               className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-ucc-green rounded-lg hover:bg-ucc-green-dark transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPending ? (

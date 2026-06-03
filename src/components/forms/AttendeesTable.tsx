@@ -22,7 +22,15 @@ const MAX_ROWS = 50;
 
 /** Maximum character lengths per field. */
 const MAX_NOMBRE = 150;
-const MAX_CARGO = 100;
+
+/** Cargo options - same as login form */
+const CARGO_OPTIONS = [
+  'Profesor',
+  'Director de Programa',
+  'Decano',
+  'Administrativo',
+  'Investigador',
+] as const;
 
 /**
  * AttendeesTable – Editable table for managing committee attendees.
@@ -118,22 +126,24 @@ export function AttendeesTable({ value, onChange, errors }: AttendeesTableProps)
                   </td>
                   <td className="px-3 py-2">
                     <div>
-                      <input
-                        type="text"
+                      <select
                         value={row.cargo}
                         onChange={(e) =>
                           handleFieldChange(index, 'cargo', e.target.value)
                         }
-                        maxLength={MAX_CARGO}
-                        placeholder="Cargo"
                         aria-label={`Cargo del asistente ${index + 1}`}
                         aria-invalid={!!rowErrors?.cargo}
-                        className={`w-full rounded border px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ucc-green/20 ${
+                        className={`w-full rounded border px-3 py-2 text-sm text-gray-900 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ucc-green/20 ${
                           rowErrors?.cargo
                             ? 'border-red-500 focus:border-red-500'
                             : 'border-gray-300 focus:border-ucc-green'
                         }`}
-                      />
+                      >
+                        <option value="" disabled>Seleccione cargo</option>
+                        {CARGO_OPTIONS.map((cargo) => (
+                          <option key={cargo} value={cargo}>{cargo}</option>
+                        ))}
+                      </select>
                       {rowErrors?.cargo && (
                         <p className="mt-1 text-xs text-red-600">
                           {rowErrors.cargo}
