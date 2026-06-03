@@ -142,6 +142,7 @@ export async function listActasAction(
  */
 export async function createActaAction(
   formData: ActaFormInput,
+  fileTexts?: string[],
 ): Promise<ActionResult<{ actaId: string }>> {
   // Require gestor or admin role
   const session = await requireGestor();
@@ -248,9 +249,13 @@ export async function createActaAction(
       where: { actaId: acta.id, estadoProcesamiento: 'completado' },
       select: { textoExtraido: true },
     });
-    aiInput.attachmentTexts = attachments
+    const dbTexts = attachments
       .map(a => a.textoExtraido)
       .filter((t): t is string => t != null && t.trim().length > 0);
+
+    // Combine DB texts with any pre-extracted texts passed from the form (local uploads)
+    const inlineTexts = (fileTexts || []).filter(t => t.trim().length > 0);
+    aiInput.attachmentTexts = [...dbTexts, ...inlineTexts];
 
     const aiResult = await generateActaContentFromForm(aiInput);
     if (!aiResult.success) {

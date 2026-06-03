@@ -1,16 +1,12 @@
 /**
- * Fallback Provider
+ * Fallback Provider - Enhanced
  *
- * Deterministic provider that generates structured formal academic minute content
- * using only form data (no external API calls). Used when AI_PROVIDER is unset/empty
- * or when the primary provider fails.
+ * Generates detailed formal academic minute content using form data AND
+ * the extracted text from attached documents. Produces rich, point-by-point
+ * development incorporating actual document content.
  *
- * Generates a complete "desarrollo" section including:
- * 1. Header section with committee type and program
- * 2. Each agenda point as a numbered section with neutral template language
- * 3. Notes about supporting documents when attachment text is available
- * 4. Closing section noting the session ended
- * 5. Attendee list formatted
+ * This provider works WITHOUT external AI APIs — it uses structured
+ * template logic enhanced with attachment content to produce professional actas.
  *
  * Requirements: 8.3, 8.6, 14.5
  */
@@ -18,7 +14,7 @@
 import type { IAIProvider, ActaGenerationInput, ActaGenerationResult } from './provider.interface';
 
 /**
- * Maps committee type to its formal Spanish name for document generation.
+ * Maps committee type to its formal Spanish name.
  */
 function getComiteNombreFormal(tipoComite: string): string {
   const mapping: Record<string, string> = {
@@ -31,107 +27,160 @@ function getComiteNombreFormal(tipoComite: string): string {
 }
 
 /**
- * Parses agenda points from the ordenDia text.
- * Splits by line breaks and filters empty lines.
+ * Extracts meaningful sentences from attachment text.
+ * Cleans up whitespace, removes very short lines, limits length.
  */
-function parseAgendaPoints(ordenDia: string): string[] {
-  return ordenDia
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+function extractKeyContent(text: string, maxSentences: number = 8): string[] {
+  if (!text || text.trim().length === 0) return [];
+
+  // Split by sentence endings or line breaks
+  const sentences = text
+    .split(/[.\n]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 15) // Only meaningful sentences
+    .slice(0, maxSentences);
+
+  return sentences;
 }
 
 /**
- * Formats the attendees section for the desarrollo document.
+ * Distributes attachment content across agenda points.
+ * Tries to relate content to points by keywords or distributes evenly.
  */
-function formatAttendeesSection(asistentes: { nombre: string; cargo: string }[]): string {
-  if (asistentes.length === 0) {
-    return '';
-  }
-
-  const header = 'Asistentes a la sesión:';
-  const list = asistentes
-    .map((a, idx) => `  ${idx + 1}. ${a.nombre} – ${a.cargo}`)
-    .join('\n');
-
-  return `${header}\n${list}`;
-}
-
-/**
- * Generates the header section of the desarrollo content.
- */
-function generateHeader(tipoComite: string, areaPrograma: string): string {
-  const nombreComite = getComiteNombreFormal(tipoComite);
-  return (
-    `DESARROLLO DE LA SESIÓN\n\n` +
-    `Se llevó a cabo la sesión del ${nombreComite} del programa de ${areaPrograma}, ` +
-    `con el fin de tratar los puntos establecidos en el orden del día.`
-  );
-}
-
-/**
- * Generates the body sections from agenda points with neutral template language.
- * If attachment texts are provided for a point, includes a note about supporting documents.
- */
-function generateAgendaSections(
+function distributeContentToPoints(
   agendaPoints: string[],
-  hasAttachments: boolean
-): string {
-  if (agendaPoints.length === 0) {
-    return 'No se registraron puntos en el orden del día para esta sesión.';
-  }
+  attachmentTexts: string[]
+): Map<number, string[]> {
+  const contentMap = new Map<number, string[]>();
 
-  const sections = agendaPoints.map((punto, idx) => {
-    const pointNumber = idx + 1;
-    let section =
-      `${pointNumber}. ${punto}\n\n` +
-      `Se revisó el punto ${pointNumber} del orden del día.`;
+  // Initialize all points
+  agendaPoints.forEach((_, idx) => contentMap.set(idx, []));
 
-    // If there are attachments, add a note about supporting documents
-    if (hasAttachments) {
-      section += ` Se presentaron los documentos de soporte correspondientes.`;
+  if (attachmentTexts.length === 0) return contentMap;
+
+  // Combine all attachment text
+  const allContent = attachmentTexts.join('\n\n');
+  const allSentences = extractKeyContent(allContent, 30);
+
+  if (allSentences.length === 0) return contentMap;
+
+  // Try keyword matching first
+  agendaPoints.forEach((punto, idx) => {
+    const keywords = punto.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+    const matched: string[] = [];
+
+    allSentences.forEach(sentence => {
+      const sentLower = sentence.toLowerCase();
+      if (keywords.some(kw => sentLower.includes(kw))) {
+        matched.push(sentence);
+      }
+    });
+
+    if (matched.length > 0) {
+      contentMap.set(idx, matched.slice(0, 4));
     }
-
-    return section;
   });
 
-  return sections.join('\n\n');
-}
-
-/**
- * Generates the closing section of the desarrollo content.
- */
-function generateClosing(asistentes: { nombre: string; cargo: string }[]): string {
-  const attendeesSection = formatAttendeesSection(asistentes);
-
-  const closing =
-    `No habiendo más asuntos que tratar, se dio por terminada la sesión.`;
-
-  if (attendeesSection) {
-    return `${closing}\n\n${attendeesSection}`;
+  // Distribute remaining content to points that have nothing
+  const emptyPoints = [...contentMap.entries()].filter(([, v]) => v.length === 0).map(([k]) => k);
+  if (emptyPoints.length > 0 && allSentences.length > 0) {
+    const perPoint = Math.max(1, Math.floor(allSentences.length / agendaPoints.length));
+    let sentIdx = 0;
+    emptyPoints.forEach(pointIdx => {
+      const chunk = allSentences.slice(sentIdx, sentIdx + perPoint);
+      if (chunk.length > 0) {
+        contentMap.set(pointIdx, chunk);
+        sentIdx += perPoint;
+      }
+    });
   }
 
-  return closing;
+  return contentMap;
 }
 
 export class FallbackProvider implements IAIProvider {
   /**
-   * Generates structured formal academic minute content using only form data.
-   * No external API calls are made. Always returns success.
+   * Generates detailed formal academic minute content using form data
+   * and extracted attachment text. Produces rich point-by-point development.
    */
   async generateActaContent(input: ActaGenerationInput): Promise<ActaGenerationResult> {
     const { ordenDia, asistentes, attachmentTexts, tipoComite, areaPrograma } = input;
+    const nombreComite = getComiteNombreFormal(tipoComite);
 
-    const agendaPoints = parseAgendaPoints(ordenDia);
-    const hasAttachments = attachmentTexts.length > 0 &&
-      attachmentTexts.some((text) => text.trim().length > 0);
+    // Parse agenda points
+    const agendaPoints = ordenDia
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
 
-    // Build the complete desarrollo content
-    const header = generateHeader(tipoComite, areaPrograma);
-    const body = generateAgendaSections(agendaPoints, hasAttachments);
-    const closing = generateClosing(asistentes);
+    // Get useful content from attachments
+    const validTexts = attachmentTexts.filter(t => t.trim().length > 0);
+    const contentDistribution = distributeContentToPoints(agendaPoints, validTexts);
 
-    const desarrollo = [header, body, closing].join('\n\n');
+    // Build the desarrollo
+    const parts: string[] = [];
+
+    // Header
+    parts.push(
+      `Se dio inicio a la sesión del ${nombreComite} del programa de ${areaPrograma}, ` +
+      `contando con la asistencia de ${asistentes.length} miembro(s), ` +
+      `con el fin de abordar los ${agendaPoints.length} punto(s) establecidos en el orden del día.`
+    );
+
+    // Each agenda point with detailed content
+    if (agendaPoints.length === 0) {
+      parts.push('\nNo se registraron puntos en el orden del día para esta sesión.');
+    } else {
+      agendaPoints.forEach((punto, idx) => {
+        const pointNum = idx + 1;
+        const relatedContent = contentDistribution.get(idx) || [];
+
+        let section = `\n${pointNum}. ${punto}\n\n`;
+
+        if (relatedContent.length > 0) {
+          // Use attachment content to elaborate on the point
+          section += `Se abordó el punto ${pointNum} del orden del día referente a "${punto}". `;
+          section += `De acuerdo con la documentación presentada y la discusión realizada, se estableció lo siguiente:\n\n`;
+
+          relatedContent.forEach(content => {
+            section += `• ${content}.\n`;
+          });
+
+          section += `\nLos miembros del comité tomaron nota de los aspectos expuestos y se acordaron las acciones correspondientes.`;
+        } else {
+          // No specific content available — use more descriptive neutral language
+          section += `Se procedió a la revisión y discusión del punto ${pointNum} del orden del día: "${punto}". `;
+          section += `Los miembros del comité analizaron los aspectos relevantes relacionados con este tema. `;
+          section += `Se tomaron las consideraciones pertinentes y se dejó constancia de los acuerdos alcanzados.`;
+        }
+
+        parts.push(section);
+      });
+    }
+
+    // Supporting documents section
+    if (validTexts.length > 0) {
+      parts.push(
+        `\nDocumentos de soporte: Se presentaron ${validTexts.length} documento(s) de soporte ` +
+        `que fueron revisados y analizados por los miembros del comité durante la sesión.`
+      );
+    }
+
+    // Attendees section
+    if (asistentes.length > 0) {
+      parts.push('\nAsistentes a la sesión:');
+      asistentes.forEach((a, idx) => {
+        parts.push(`  ${idx + 1}. ${a.nombre} – ${a.cargo}`);
+      });
+    }
+
+    // Closing
+    parts.push(
+      `\nNo habiendo más asuntos que tratar, se dio por terminada la sesión del ${nombreComite}, ` +
+      `dejando constancia de los compromisos y acuerdos establecidos durante la reunión.`
+    );
+
+    const desarrollo = parts.join('\n');
 
     return {
       desarrollo,
@@ -140,17 +189,10 @@ export class FallbackProvider implements IAIProvider {
     };
   }
 
-  /**
-   * Fallback provider does not have text extraction capability.
-   * Always returns an empty string.
-   */
   async extractTextFromDocument(_buffer: Buffer, _mimeType: string): Promise<string> {
     return '';
   }
 
-  /**
-   * Fallback provider is always available (no external dependencies).
-   */
   async isAvailable(): Promise<boolean> {
     return true;
   }

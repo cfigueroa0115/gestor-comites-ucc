@@ -101,6 +101,7 @@ function ActaFormModalInner({
   const [proyecto, setProyecto] = useState(userNombreCompleto);
   const [reviso, setReviso] = useState('');
   const [copia, setCopia] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   // Error state
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -223,8 +224,35 @@ function ActaFormModalInner({
           return;
         }
 
-        // Call server action with the Zod-validated data (correctly typed)
-        const result = await createActaAction(zodResult.data);
+        // Call server action with the Zod-validated data
+        // First, extract text from attached files to pass to the AI
+        const fileTexts: string[] = [];
+        for (const file of attachedFiles) {
+          try {
+            // For text-based files, read content directly on client
+            if (file.type === 'text/plain' || file.type === 'text/csv' || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+              const text = await file.text();
+              if (text.trim()) fileTexts.push(text.trim());
+            } else {
+              // For other files (PDF, DOCX, XLSX), send to server for extraction
+              const formDataUpload = new FormData();
+              formDataUpload.append('file', file);
+              try {
+                const { extractFileTextAction } = await import('@/actions/file.actions');
+                const extractResult = await extractFileTextAction(formDataUpload);
+                if (extractResult.success && extractResult.data) {
+                  fileTexts.push(extractResult.data);
+                }
+              } catch {
+                // Extraction failed — continue without this file's text
+              }
+            }
+          } catch {
+            // Skip files that can't be read
+          }
+        }
+
+        const result = await createActaAction(zodResult.data, fileTexts);
 
         if (result.success) {
           onSuccess();
@@ -414,7 +442,7 @@ function ActaFormModalInner({
 
           {/* Archivos Adjuntos (Soportes) */}
           <div className="space-y-1">
-            <AttachmentManager onUploadStatusChange={setUploadInProgress} />
+            <AttachmentManager onUploadStatusChange={setUploadInProgress} onFilesReady={setAttachedFiles} />
           </div>
 
           {/* Proyectó */}

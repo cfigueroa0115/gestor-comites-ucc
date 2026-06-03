@@ -336,3 +336,53 @@ function getErrorCode(errorMessage: string): 'INVALID_FILE_TYPE' | 'MIME_MISMATC
   }
   return 'VALIDATION_ERROR';
 }
+
+
+// ---------------------------------------------------------------------------
+// Text Extraction Action (for client-side file reading)
+// ---------------------------------------------------------------------------
+
+/**
+ * Server Action: Extract text from an uploaded file.
+ *
+ * Used by the ActaFormModal to extract text content from PDF, DOCX, XLSX files
+ * before sending to the AI generation pipeline.
+ */
+export async function extractFileTextAction(
+  formData: FormData,
+): Promise<ActionResult<string>> {
+  await requireGestor();
+
+  const file = formData.get('file') as File | null;
+
+  if (!file || !(file instanceof File)) {
+    return {
+      success: false,
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'No se proporcionó un archivo válido.',
+      },
+    };
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const extension = getFileExtension(file.name);
+
+    const extractedText = await extractText(buffer, file.type, extension);
+
+    return {
+      success: true,
+      data: extractedText || '',
+    };
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'No se pudo extraer texto del archivo.',
+      },
+    };
+  }
+}
