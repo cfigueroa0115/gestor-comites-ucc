@@ -10,13 +10,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* UCC Institutional Colors */
+  --color-ucc-green: #00723F;
+  --color-ucc-green-dark: #005A32;
+  --color-ucc-green-light: #E6F4ED;
+  --color-ucc-white: #FFFFFF;
+  --color-ucc-gray: #F5F5F5;
+  --color-ucc-gray-dark: #E0E0E0;
+  --color-ucc-gold: #F5A623;
+  --color-ucc-blue: #4A90D9;
+  --color-ucc-red: #DC2626;
+  --color-ucc-orange: #F97316;
 }
 
 body {

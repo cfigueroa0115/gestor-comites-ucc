@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+enum Rol {
+  Administrador
+  Usuario_Gestor
+  Consulta
+}
+
+enum EstadoActa {
+  Borrador
+  Generada
+  Descargada
+  Error_generacion
+  En_procesamiento
+}
+
+enum EstadoCarga {
+  pendiente
+  subiendo
+  completado
+  error
+}
+
+enum EstadoProcesamiento {
+  pendiente
+  procesando
+  completado
+  error
+  no_soportado
+}
+
+model User {
+  id              String   @id @default(cuid())
+  nombreCompleto  String   @map("nombre_completo") @db.VarChar(100)
+  usuario         String   @unique @db.VarChar(50)
+  passwordHash    String   @map("password_hash")
+  cargo           String   @db.VarChar(100)
+  correo          String   @db.VarChar(150)
+  rol             Rol      @default(Consulta)
+  activo          Boolean  @default(true)
+  failedAttempts  Int      @default(0) @map("failed_attempts")
+  lockedUntil     DateTime? @map("locked_until")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  actas           Acta[]   @relation("ElaboradoPor")
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Committee {
+  id        String   @id @default(cuid())
+  nombre    String   @db.VarChar(100)
+  codigo    String   @unique @db.VarChar(10)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("committees")
+}
+
+model Acta {
+  id                    String      @id @default(cuid())
+  numeroActa            String      @unique @map("numero_acta")
+  secuencia             Int
+  anio                  Int
+  fechaGeneracion       DateTime    @map("fecha_generacion")
+  ciudad                String      @default("Bogotá D.C.") @db.VarChar(100)
+  horaInicio            String?     @map("hora_inicio") @db.VarChar(10)
+  horaFin               String?     @map("hora_fin") @db.VarChar(10)
+  lugar                 String?     @db.VarChar(200)
+  tipoComite            String      @map("tipo_comite") @db.VarChar(50)
+  areaPrograma          String      @map("area_programa") @db.VarChar(100)
+  ordenDia              String      @map("orden_dia") @db.Text
+  asistentesJson        Json        @map("asistentes_json")
+  desarrolloGenerado    String?     @map("desarrollo_generado") @db.Text
+  presidenteNombre      String?     @map("presidente_nombre") @db.VarChar(150)
+  presidenteCargo       String?     @map("presidente_cargo") @db.VarChar(100)
+  elaboradoPorUsuarioId String      @map("elaborado_por_usuario_id")
+  elaboradoPorNombre    String      @map("elaborado_por_nombre") @db.VarChar(150)
+  elaboradoPorCargo     String      @map("elaborado_por_cargo") @db.VarChar(100)
+  copia                 String?     @db.VarChar(300)
+  proyecto              String      @db.VarChar(150)
+  reviso                String      @db.VarChar(150)
+  estado                EstadoActa  @default(Borrador)
+  docxPath              String?     @map("docx_path")
+  docxFilename          String?     @map("docx_filename")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  elaboradoPor          User        @relation("ElaboradoPor", fields: [elaboradoPorUsuarioId], references: [id])
+  attachments           Attachment[]
+
+  @@index([tipoComite, anio])
+  @@index([estado])
+  @@index([fechaGeneracion])
+  @@map("actas")
+}
+
+model Attachment {
+  id                  String              @id @default(cuid())
+  actaId              String              @map("acta_id")
+  nombreArchivo       String              @map("nombre_archivo") @db.VarChar(255)
+  tipoMime            String              @map("tipo_mime") @db.VarChar(100)
+  extension           String              @db.VarChar(20)
+  sizeBytes           Int                 @map("size_bytes")
+  storagePath         String              @map("storage_path")
+  estadoCarga         EstadoCarga         @default(pendiente) @map("estado_carga")
+  estadoProcesamiento EstadoProcesamiento @default(pendiente) @map("estado_procesamiento")
+  textoExtraido       String?             @map("texto_extraido") @db.Text
+  errorProcesamiento  String?             @map("error_procesamiento") @db.Text
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  acta                Acta                @relation(fields: [actaId], references: [id], onDelete: Cascade)
+
+  @@index([actaId])
+  @@map("attachments")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?  @map("user_id")
+  action       String   @db.VarChar(50)
+  entityType   String   @map("entity_type") @db.VarChar(50)
+  entityId     String?  @map("entity_id")
+  metadataJson Json?    @map("metadata_json")
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Sequence {
+  id            String   @id @default(cuid())
+  committeeCode String   @map("committee_code") @db.VarChar(10)
+  year          Int
+  lastNumber    Int      @default(0) @map("last_number")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([committeeCode, year])
+  @@map("sequences")
+}
