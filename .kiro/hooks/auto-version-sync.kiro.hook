@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Auto Version & Deploy",
+  "description": "Automatically commits and pushes changes to GitHub after any file edit in the project. Vercel auto-deploys on every push to main, keeping production synchronized in real-time.",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "cd c:\\DesarrollosCF\\Gestor_Comites && git add -A && git diff --cached --quiet || (git commit -m \"chore: auto-sync changes\" && git push origin main)"
+  }
+}
