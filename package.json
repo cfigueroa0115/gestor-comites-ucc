@@ -5,7 +5,7 @@
   "description": "Portal Gestión de Comités - Universidad Cooperativa de Colombia, Facultad de Ingeniería",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
