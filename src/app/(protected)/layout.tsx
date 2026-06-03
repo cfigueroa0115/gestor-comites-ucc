@@ -20,16 +20,14 @@ export default async function ProtectedLayout({
           <div className="flex items-center justify-between h-[72px]">
             {/* Left: Logo clickable (goes to dashboard) */}
             <Link href="/dashboard" className="flex items-center gap-3 group transition-all duration-300 hover:scale-[1.02]">
-              <div className="bg-white rounded-lg p-1 shadow-md group-hover:shadow-lg transition-shadow">
-                <Image
-                  src="/images/logo-ucc.jpeg"
-                  alt="Logo UCC - Volver al inicio"
-                  width={48}
-                  height={48}
-                  className="rounded"
-                  priority
-                />
-              </div>
+              <Image
+                src="/images/logo-ucc.jpeg"
+                alt="Logo UCC - Volver al inicio"
+                width={56}
+                height={56}
+                className="rounded-lg"
+                priority
+              />
             </Link>
 
             {/* Center: Navigation with icons */}
