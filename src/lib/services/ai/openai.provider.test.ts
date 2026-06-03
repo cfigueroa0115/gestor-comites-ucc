@@ -35,7 +35,7 @@ const sampleInput: ActaGenerationInput = {
   ordenDia: '1. Apertura\n2. Revisión de notas\n3. Cierre',
   asistentes: [
     { nombre: 'Carlos Figueroa', cargo: 'Decano' },
-    { nombre: 'María López', cargo: 'Docente' },
+    { nombre: 'María López', cargo: 'Profesor' },
   ],
   attachmentTexts: ['Contenido del documento adjunto.'],
   tipoComite: 'Curricular',

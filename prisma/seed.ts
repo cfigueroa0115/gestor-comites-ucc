@@ -43,7 +43,7 @@ async function seedAdminUser() {
   const adminUser = process.env.ADMIN_USER;
   const adminPassword = process.env.ADMIN_PASSWORD;
   const adminEmail = process.env.ADMIN_EMAIL;
-  const adminCargo = process.env.ADMIN_CARGO || 'Administrador del Sistema';
+  const adminCargo = process.env.ADMIN_CARGO || 'Profesor';
 
   if (!adminUser || !adminPassword || !adminEmail) {
     console.error(

@@ -25,7 +25,7 @@ describe('FallbackProvider', () => {
       ordenDia: 'Aprobación del acta anterior\nRevision de avances académicos\nProposiciones y varios',
       asistentes: [
         { nombre: 'Carlos Figueroa', cargo: 'Director de Programa' },
-        { nombre: 'María López', cargo: 'Docente' },
+        { nombre: 'María López', cargo: 'Profesor' },
       ],
       attachmentTexts: [],
       tipoComite: 'Curricular',
@@ -92,7 +92,7 @@ describe('FallbackProvider', () => {
       const result = await provider.generateActaContent(baseInput);
       expect(result.desarrollo).toContain('Asistentes a la sesión:');
       expect(result.desarrollo).toContain('1. Carlos Figueroa – Director de Programa');
-      expect(result.desarrollo).toContain('2. María López – Docente');
+      expect(result.desarrollo).toContain('2. María López – Profesor');
     });
 
     it('handles empty orden del dia gracefully', async () => {

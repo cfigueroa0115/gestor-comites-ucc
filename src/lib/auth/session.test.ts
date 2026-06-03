@@ -134,7 +134,7 @@ describe('session', () => {
           id: 'user-1',
           nombreCompleto: 'Test User',
           usuario: 'testuser',
-          cargo: 'Docente',
+          cargo: 'Profesor',
           rol: 'Administrador',
           correo: 'test@ucc.edu.co',
         }),
@@ -149,7 +149,7 @@ describe('session', () => {
         id: 'user-123',
         nombreCompleto: 'Carlos Figueroa',
         usuario: 'cfigueroa',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Administrador',
         correo: 'carlos@ucc.edu.co',
       });
@@ -157,7 +157,7 @@ describe('session', () => {
       expect(mockSessionData.userId).toBe('user-123');
       expect(mockSessionData.nombreCompleto).toBe('Carlos Figueroa');
       expect(mockSessionData.usuario).toBe('cfigueroa');
-      expect(mockSessionData.cargo).toBe('Docente');
+      expect(mockSessionData.cargo).toBe('Profesor');
       expect(mockSessionData.rol).toBe('Administrador');
       expect(mockSessionData.correo).toBe('carlos@ucc.edu.co');
       expect(mockSessionData.loginAt).toBeDefined();

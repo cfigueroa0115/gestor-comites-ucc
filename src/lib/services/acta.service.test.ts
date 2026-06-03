@@ -46,7 +46,7 @@ const MOCK_ACTA = {
   tipoComite: 'Curricular',
   areaPrograma: 'Ingeniería Industrial',
   ordenDia: '1. Apertura\n2. Revisión de temas',
-  asistentesJson: [{ nombre: 'Ana López', cargo: 'Docente' }],
+  asistentesJson: [{ nombre: 'Ana López', cargo: 'Profesor' }],
   desarrolloGenerado: 'Desarrollo generado...',
   presidenteNombre: null,
   presidenteCargo: null,

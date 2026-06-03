@@ -21,13 +21,13 @@ describe('AttendeesTable', () => {
 
     it('renders one row per attendee', () => {
       const attendees: Attendee[] = [
-        { nombre: 'Carlos', cargo: 'Docente' },
+        { nombre: 'Carlos', cargo: 'Profesor' },
         { nombre: 'Maria', cargo: 'Decana' },
       ];
       render(<AttendeesTable value={attendees} onChange={() => {}} />);
 
       expect(screen.getByDisplayValue('Carlos')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Docente')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Profesor')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Maria')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Decana')).toBeInTheDocument();
     });

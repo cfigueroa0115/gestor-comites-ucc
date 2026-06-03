@@ -6,7 +6,7 @@ describe('loginSchema', () => {
     const input: LoginInput = {
       usuario: 'admin',
       contrasena: 'Passw0rd!',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     };
     const result = loginSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -16,7 +16,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       usuario: 'ab',
       contrasena: 'Passw0rd!',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
     expect(result.success).toBe(false);
   });
@@ -25,7 +25,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       usuario: 'a'.repeat(51),
       contrasena: 'Passw0rd!',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
     expect(result.success).toBe(false);
   });
@@ -34,7 +34,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       usuario: 'admin',
       contrasena: 'short',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
     expect(result.success).toBe(false);
   });
@@ -43,7 +43,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       usuario: 'admin',
       contrasena: 'a'.repeat(129),
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
     expect(result.success).toBe(false);
   });

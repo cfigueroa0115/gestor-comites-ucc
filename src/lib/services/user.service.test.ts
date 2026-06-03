@@ -50,7 +50,7 @@ const MOCK_USER = {
   id: 'user-1',
   nombreCompleto: 'Ana Martínez',
   usuario: 'amartinez',
-  cargo: 'Docente',
+  cargo: 'Profesor',
   correo: 'ana@ucc.edu.co',
   rol: 'Administrador' as const,
   activo: true,
@@ -144,7 +144,7 @@ describe('createUser', () => {
       nombreCompleto: 'Ana Martínez',
       usuario: 'amartinez',
       password: 'SecurePass1',
-      cargo: 'Docente',
+      cargo: 'Profesor',
       correo: 'ana@ucc.edu.co',
       rol: 'Administrador',
     });
@@ -160,7 +160,7 @@ describe('createUser', () => {
       nombreCompleto: 'Ana Martínez',
       usuario: 'amartinez',
       password: 'SecurePass1',
-      cargo: 'Docente',
+      cargo: 'Profesor',
       correo: 'ana@ucc.edu.co',
       rol: 'Administrador',
     });

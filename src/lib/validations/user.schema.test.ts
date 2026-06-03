@@ -6,7 +6,7 @@ describe('createUserSchema', () => {
     nombreCompleto: 'Carlos Figueroa',
     usuario: 'cfigueroa',
     password: 'Segura1234',
-    cargo: 'Docente',
+    cargo: 'Profesor',
     correo: 'carlos@ucc.edu.co',
     rol: 'Administrador' as const,
   };
@@ -93,7 +93,7 @@ describe('createUserSchema', () => {
 describe('updateUserSchema', () => {
   const validInput = {
     nombreCompleto: 'Carlos Figueroa',
-    cargo: 'Docente',
+    cargo: 'Profesor',
     correo: 'carlos@ucc.edu.co',
     rol: 'Usuario_Gestor' as const,
   };

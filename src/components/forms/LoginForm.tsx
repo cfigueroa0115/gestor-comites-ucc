@@ -6,7 +6,7 @@ import type { ActionResult } from '@/types';
 
 /** Static cargo options for the login form dropdown. */
 const CARGO_OPTIONS = [
-  'Docente',
+  'Profesor',
   'Director de Programa',
   'Decano',
   'Administrativo',

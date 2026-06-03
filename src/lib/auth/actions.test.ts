@@ -59,7 +59,7 @@ const VALID_USER = {
   nombreCompleto: 'Carlos Figueroa',
   usuario: 'cfigueroa',
   passwordHash: '$2a$12$hashedpassword',
-  cargo: 'Docente',
+  cargo: 'Profesor',
   correo: 'carlos@ucc.edu.co',
   rol: 'Administrador' as const,
   activo: true,
@@ -78,7 +78,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'ab',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -91,7 +91,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'short',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -119,7 +119,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'nonexistent',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -137,7 +137,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -161,7 +161,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -185,7 +185,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     // Should redirect on success (throws NEXT_REDIRECT)
@@ -201,7 +201,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'wrongpassword',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -222,7 +222,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'wrongpassword',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     const result = await loginAction(fd);
@@ -266,7 +266,7 @@ describe('loginAction', () => {
     const fd = buildFormData({
       usuario: 'cfigueroa',
       contrasena: 'password123',
-      cargo: 'Docente',
+      cargo: 'Profesor',
     });
 
     await expect(loginAction(fd)).rejects.toThrow('NEXT_REDIRECT');
@@ -282,7 +282,7 @@ describe('loginAction', () => {
       id: 'user-123',
       nombreCompleto: 'Carlos Figueroa',
       usuario: 'cfigueroa',
-      cargo: 'Docente',
+      cargo: 'Profesor',
       rol: 'Administrador',
       correo: 'carlos@ucc.edu.co',
     });
@@ -313,7 +313,7 @@ describe('loginAction', () => {
     mockCompare.mockResolvedValue(false);
     mockUpdate.mockResolvedValue({});
     const r3 = await loginAction(
-      buildFormData({ usuario: 'cfigueroa', contrasena: 'wrong123', cargo: 'Docente' }),
+      buildFormData({ usuario: 'cfigueroa', contrasena: 'wrong123', cargo: 'Profesor' }),
     );
     expect(r3.error?.message).toBe(genericMsg);
 

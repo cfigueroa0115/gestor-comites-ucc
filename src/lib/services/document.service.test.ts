@@ -15,13 +15,13 @@ describe('Document Service', () => {
       const asistentes = [
         { nombre: 'Juan Pérez', cargo: 'Director' },
         { nombre: 'María García', cargo: 'Coordinadora' },
-        { nombre: 'Carlos López', cargo: 'Docente' },
+        { nombre: 'Carlos López', cargo: 'Profesor' },
       ];
 
       const result = formatAsistentes(asistentes);
 
       expect(result).toBe(
-        '1. Juan Pérez - Director\n2. María García - Coordinadora\n3. Carlos López - Docente'
+        '1. Juan Pérez - Director\n2. María García - Coordinadora\n3. Carlos López - Profesor'
       );
     });
 
@@ -160,7 +160,7 @@ describe('Document Service', () => {
         lugar: 'Auditorio B',
         asistentes: [
           { nombre: 'Ana Torres', cargo: 'Investigadora' },
-          { nombre: 'Luis Ramírez', cargo: 'Docente' },
+          { nombre: 'Luis Ramírez', cargo: 'Profesor' },
         ],
         ordenDia: '1. Revisión\n2. Aprobación',
         desarrollo: 'Se aprobaron todos los puntos.',

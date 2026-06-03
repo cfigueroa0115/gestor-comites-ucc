@@ -45,7 +45,7 @@ describe('guards', () => {
         userId: 'user-1',
         nombreCompleto: 'Test User',
         usuario: 'testuser',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Administrador',
         correo: 'test@ucc.edu.co',
         loginAt: '2024-01-01T00:00:00.000Z',
@@ -57,7 +57,7 @@ describe('guards', () => {
       expect(result.userId).toBe('user-1');
       expect(result.nombreCompleto).toBe('Test User');
       expect(result.usuario).toBe('testuser');
-      expect(result.cargo).toBe('Docente');
+      expect(result.cargo).toBe('Profesor');
       expect(result.rol).toBe('Administrador');
       expect(result.correo).toBe('test@ucc.edu.co');
       expect(result.loginAt).toBe('2024-01-01T00:00:00.000Z');
@@ -85,7 +85,7 @@ describe('guards', () => {
         userId: 'user-2',
         nombreCompleto: 'Gestor User',
         usuario: 'gestor',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Usuario_Gestor',
         correo: 'gestor@ucc.edu.co',
         loginAt: '2024-01-01T00:00:00.000Z',
@@ -101,7 +101,7 @@ describe('guards', () => {
         userId: 'user-3',
         nombreCompleto: 'Consulta User',
         usuario: 'consulta',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Consulta',
         correo: 'consulta@ucc.edu.co',
         loginAt: '2024-01-01T00:00:00.000Z',
@@ -144,7 +144,7 @@ describe('guards', () => {
         userId: 'user-3',
         nombreCompleto: 'Consulta User',
         usuario: 'consulta',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Consulta',
         correo: 'consulta@ucc.edu.co',
         loginAt: '2024-01-01T00:00:00.000Z',
@@ -178,7 +178,7 @@ describe('guards', () => {
         userId: 'user-2',
         nombreCompleto: 'Gestor User',
         usuario: 'gestor',
-        cargo: 'Docente',
+        cargo: 'Profesor',
         rol: 'Usuario_Gestor',
         correo: 'gestor@ucc.edu.co',
         loginAt: '2024-01-01T00:00:00.000Z',
