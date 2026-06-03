@@ -6,6 +6,7 @@ import { validateFile, getFileExtension } from '@/lib/validations/file.schema';
 import { sanitizeFilename } from '@/lib/utils/sanitize';
 import { getFileStorage } from '@/lib/services/file-storage.service';
 import { auditLogger } from '@/lib/services/audit.service';
+import { extractText, isUnsupportedMediaType } from '@/lib/services/ai/text-extractor';
 import { prisma } from '@/lib/db/prisma';
 import { DEFAULT_MAX_FILE_SIZE_MB, MEDIA_EXTENSIONS } from '@/lib/utils/constants';
 import type { ActionResult } from '@/types';
@@ -162,6 +163,36 @@ export async function uploadFileAction(
         estadoProcesamiento,
       },
     });
+
+    // Extract text from the file if it's a supported document type (not media)
+    if (!isUnsupportedMediaType(file.type)) {
+      try {
+        const extractedText = await extractText(buffer, file.type, extension);
+        if (extractedText && extractedText.trim().length > 0) {
+          await prisma.attachment.update({
+            where: { id: attachment.id },
+            data: {
+              textoExtraido: extractedText,
+              estadoProcesamiento: 'completado',
+            },
+          });
+        } else {
+          await prisma.attachment.update({
+            where: { id: attachment.id },
+            data: { estadoProcesamiento: 'completado' },
+          });
+        }
+      } catch {
+        // Text extraction failure is non-critical — mark as error but don't fail the upload
+        await prisma.attachment.update({
+          where: { id: attachment.id },
+          data: {
+            estadoProcesamiento: 'error',
+            errorProcesamiento: 'No se pudo extraer texto del documento.',
+          },
+        });
+      }
+    }
 
     // Audit log (fire-and-forget, non-blocking)
     const ipAddress = await getClientIp();

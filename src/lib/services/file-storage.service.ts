@@ -30,7 +30,15 @@ export class LocalFileStorage implements IFileStorage {
   private basePath: string;
 
   constructor(basePath?: string) {
-    this.basePath = basePath || path.join(process.cwd(), 'uploads');
+    // On serverless (Vercel), use /tmp which is writable.
+    // Locally, use the project-level 'uploads' directory.
+    if (basePath) {
+      this.basePath = basePath;
+    } else if (process.env.VERCEL) {
+      this.basePath = '/tmp/uploads';
+    } else {
+      this.basePath = path.join(process.cwd(), 'uploads');
+    }
   }
 
   async upload(file: Buffer, _filePath: string, metadata: FileMetadata): Promise<StorageResult> {

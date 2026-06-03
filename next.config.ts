@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Server Actions are enabled by default in Next.js 14+.
+  // Include template files in the serverless function bundle
+  outputFileTracingIncludes: {
+    '/api/**': ['./templates/**'],
+    '/actas/**': ['./templates/**'],
+    '/dashboard/**': ['./templates/**'],
+  },
   // Configure security headers for all routes.
   headers: async () => [
     {
