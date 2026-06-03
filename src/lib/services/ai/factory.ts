@@ -10,15 +10,17 @@
 import type { IAIProvider } from './provider.interface';
 import { OpenAIProvider } from './openai.provider';
 import { AnthropicProvider } from './anthropic.provider';
+import { GroqProvider } from './groq.provider';
 import { FallbackProvider } from './fallback.provider';
 
-export type AIProviderName = 'openai' | 'anthropic' | 'fallback';
+export type AIProviderName = 'openai' | 'anthropic' | 'groq' | 'fallback';
 
 /**
  * Creates an AI provider instance based on the AI_PROVIDER environment variable.
  *
  * - 'openai'    → OpenAIProvider
  * - 'anthropic' → AnthropicProvider
+ * - 'groq'      → GroqProvider (free, fast, Llama 3.1)
  * - '' / unset  → FallbackProvider (deterministic, no API calls)
  */
 export function createAIProvider(): IAIProvider {
@@ -29,6 +31,8 @@ export function createAIProvider(): IAIProvider {
       return new OpenAIProvider();
     case 'anthropic':
       return new AnthropicProvider();
+    case 'groq':
+      return new GroqProvider();
     case 'fallback':
     case '':
     default:
@@ -38,12 +42,12 @@ export function createAIProvider(): IAIProvider {
 
 /**
  * Resolves the effective provider name from the environment.
- * Useful for logging and audit entries.
  */
 export function getProviderName(): AIProviderName {
   const providerName = (process.env.AI_PROVIDER ?? '').trim().toLowerCase();
 
   if (providerName === 'openai') return 'openai';
   if (providerName === 'anthropic') return 'anthropic';
+  if (providerName === 'groq') return 'groq';
   return 'fallback';
 }
