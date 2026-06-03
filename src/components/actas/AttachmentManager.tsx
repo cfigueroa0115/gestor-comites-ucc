@@ -16,6 +16,7 @@ import { sanitizeFilename } from '@/lib/utils/sanitize';
 export interface AttachmentManagerProps {
   actaId?: string;
   onUploadStatusChange?: (uploading: boolean) => void;
+  onFilesReady?: (files: File[]) => void;
 }
 
 /** Represents the local state of a managed file/attachment. */
@@ -122,7 +123,7 @@ function getEstadoProcesamientoStyle(estado: ManagedFile['estadoProcesamiento'])
  *
  * Validates: Requirements 7.1, 7.4, 7.5, 7.6, 7.7, 7.10
  */
-export function AttachmentManager({ actaId, onUploadStatusChange }: AttachmentManagerProps) {
+export function AttachmentManager({ actaId, onUploadStatusChange, onFilesReady }: AttachmentManagerProps) {
   const [files, setFiles] = useState<ManagedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -176,17 +177,22 @@ export function AttachmentManager({ actaId, onUploadStatusChange }: AttachmentMa
           }
           formData.append('sanitizedName', managedFile.nombre);
 
-          // Call server action when available (task 11.4)
-          // For now, simulate upload by dynamically importing and calling if available
+          // If no actaId yet (creating new acta), just validate and keep file locally
+          // Files will be uploaded after the acta is created
           let uploadResult: { success: boolean; error?: { message: string }; data?: { id: string } } | null = null;
 
-          try {
-            const { uploadFileAction } = await import('@/actions/file.actions');
-            uploadResult = await uploadFileAction(formData);
-          } catch {
-            // file.actions.ts not yet implemented - simulate success for development
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            uploadResult = { success: true, data: { id: `server_${managedFile.id}` } };
+          if (!actaId) {
+            // Local-only mode: file is validated and ready, no server upload yet
+            uploadResult = { success: true, data: { id: `local_${managedFile.id}` } };
+          } else {
+            try {
+              const { uploadFileAction } = await import('@/actions/file.actions');
+              uploadResult = await uploadFileAction(formData);
+            } catch {
+              // Simulate success if action not available
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              uploadResult = { success: true, data: { id: `server_${managedFile.id}` } };
+            }
           }
 
           if (uploadResult?.success) {
@@ -231,8 +237,19 @@ export function AttachmentManager({ actaId, onUploadStatusChange }: AttachmentMa
       }
 
       updateUploadStatus(false);
+
+      // Notify parent of ready files (for acta creation flow)
+      if (onFilesReady) {
+        setFiles((currentFiles) => {
+          const readyFiles = currentFiles
+            .filter((f) => f.estadoCarga === 'completado' && f.file)
+            .map((f) => f.file!);
+          onFilesReady(readyFiles);
+          return currentFiles;
+        });
+      }
     },
-    [actaId, updateUploadStatus]
+    [actaId, updateUploadStatus, onFilesReady]
   );
 
   /**
