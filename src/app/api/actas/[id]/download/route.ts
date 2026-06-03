@@ -2,22 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db/prisma';
-import { getFileStorage } from '@/lib/services/file-storage.service';
+import { documentService } from '@/lib/services/document.service';
 import { auditLogger } from '@/lib/services/audit.service';
-import type { SessionData } from '@/types';
+import type { SessionData, ActaDocxData } from '@/types';
 import { sessionOptions } from '@/lib/auth/session';
 
 /**
  * Authenticated document download API route for acta .docx files.
  *
- * Flow:
- * 1. Verify session authentication
- * 2. Fetch acta record and verify docx exists
- * 3. Stream the .docx file with proper Content-Type and Content-Disposition
- * 4. Update Estado_Acta to 'Descargada'
- * 5. Audit log the download (user, filename, timestamp)
- *
- * Validates: Requirements 9.5, 9.6
+ * Regenerates the .docx on-the-fly from the data stored in the database.
+ * This approach works on Vercel's ephemeral filesystem since it doesn't
+ * depend on previously stored files in /tmp.
  */
 export async function GET(
   request: NextRequest,
@@ -60,26 +55,43 @@ export async function GET(
     );
   }
 
-  // 4. Verify the acta has a generated document
-  if (!acta.docxPath || !acta.docxFilename) {
+  // 4. Verify the acta has generated content
+  if (!acta.desarrolloGenerado) {
     return NextResponse.json(
-      { error: 'El documento aún no ha sido generado para esta acta.' },
+      { error: 'El acta aún no tiene contenido generado.' },
       { status: 404 }
     );
   }
 
-  // 5. Stream the file from storage
   try {
-    const storage = getFileStorage();
-    const stream = await storage.getStream(acta.docxPath);
+    // 5. Build the document data from the acta record
+    const asistentes = Array.isArray(acta.asistentesJson)
+      ? (acta.asistentesJson as { nombre: string; cargo: string }[])
+      : [];
 
-    // 6. Update Estado_Acta to 'Descargada'
+    const docxData: ActaDocxData = {
+      numeroActa: acta.numeroActa,
+      ciudadFecha: `${acta.ciudad}, ${formatDateSpanish(acta.fechaGeneracion)}`,
+      hora: acta.horaInicio || '',
+      lugar: acta.lugar || 'Facultad de Ingeniería',
+      asistentes,
+      ordenDia: acta.ordenDia,
+      desarrollo: acta.desarrolloGenerado,
+      proyecto: acta.proyecto,
+      reviso: acta.reviso,
+      copia: acta.copia || undefined,
+    };
+
+    // 6. Generate the .docx document on-the-fly
+    const generatedDoc = await documentService.generateActaDocx(docxData);
+
+    // 7. Update Estado_Acta to 'Descargada'
     await prisma.acta.update({
       where: { id },
       data: { estado: 'Descargada' },
     });
 
-    // 7. Audit log the download (fire-and-forget)
+    // 8. Audit log the download (fire-and-forget)
     const ip = request.headers.get('x-forwarded-for')
       || request.headers.get('x-real-ip')
       || '0.0.0.0';
@@ -90,32 +102,42 @@ export async function GET(
       entityType: 'acta',
       entityId: acta.id,
       metadataJson: {
-        filename: acta.docxFilename,
+        filename: acta.docxFilename || acta.numeroActa + '.docx',
         numeroActa: acta.numeroActa,
         timestamp: new Date().toISOString(),
       },
       ipAddress: ip.split(',')[0].trim(),
     });
 
-    // 8. Set response headers for .docx download
-    const headers = new Headers();
-    headers.set(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    headers.set(
-      'Content-Disposition',
-      `attachment; filename="${encodeURIComponent(acta.docxFilename)}"`
-    );
-    headers.set('Cache-Control', 'private, no-cache');
+    // 9. Return the generated document as download
+    const filename = acta.docxFilename || `${acta.numeroActa}.docx`;
 
-    return new Response(stream, { headers });
+    return new Response(new Uint8Array(generatedDoc.buffer), {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Content-Length': String(generatedDoc.size),
+        'Cache-Control': 'private, no-cache',
+      },
+    });
   } catch (error) {
-    console.error(`[API/actas/${id}/download] Error streaming document:`, error);
+    console.error(`[API/actas/${id}/download] Error generating document:`, error);
 
     return NextResponse.json(
-      { error: 'No se pudo recuperar el documento del almacenamiento.' },
+      { error: 'No se pudo generar el documento. Verifique que la plantilla institucional esté configurada.' },
       { status: 500 }
     );
   }
+}
+
+/**
+ * Formats a date as "DD de [month in Spanish] de YYYY"
+ */
+function formatDateSpanish(date: Date): string {
+  const months = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+  const d = new Date(date);
+  return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
 }

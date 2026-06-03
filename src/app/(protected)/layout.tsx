@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { requireAuth } from '@/lib/auth/guards';
 import { logoutAction } from '@/actions/auth.actions';
+import { BackButton } from '@/components/ui/BackButton';
 
 /**
  * Protected layout that wraps all authenticated routes (/dashboard, /actas, /admin).
@@ -86,6 +87,11 @@ export default async function ProtectedLayout({
           </div>
         </div>
       </header>
+
+      {/* Back navigation bar */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <BackButton />
+      </div>
 
       {/* Main content area */}
       <main className="flex-1">
