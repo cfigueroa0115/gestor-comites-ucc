@@ -291,7 +291,7 @@ function ActaFormModalInner({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-lg shadow-lg w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
           <h2 className="text-lg font-semibold text-gray-900">Nueva Acta de Comité</h2>
@@ -307,6 +307,25 @@ function ActaFormModalInner({
             </svg>
           </button>
         </div>
+
+        {/* AI Generation Overlay */}
+        {isPending && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/95 rounded-lg">
+            <div className="flex flex-col items-center gap-4 p-8">
+              <div className="relative">
+                <svg className="h-16 w-16 animate-spin text-ucc-green" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-900">Generando acta con Inteligencia Artificial</p>
+                <p className="text-sm text-gray-500 mt-1">Leyendo documentos adjuntos y redactando el desarrollo...</p>
+                <p className="text-xs text-gray-400 mt-2">Este proceso puede tomar entre 10-30 segundos</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-5">
@@ -541,7 +560,7 @@ function ActaFormModalInner({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Creando acta...
+                  Generando acta con IA...
                 </>
               ) : (
                 'Crear Acta'
