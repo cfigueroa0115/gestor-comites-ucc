@@ -109,12 +109,11 @@ describe('session', () => {
       expect(session).toBeDefined();
     });
 
-    it('should update lastActivity when session has userId', async () => {
+    it('should NOT call save (read-only operation)', async () => {
       mockSessionData = { userId: 'user-123', lastActivity: '2024-01-01T00:00:00.000Z' };
       const { getSession } = await import('./session');
       await getSession();
-      expect(mockSave).toHaveBeenCalled();
-      expect(mockSessionData.lastActivity).not.toBe('2024-01-01T00:00:00.000Z');
+      expect(mockSave).not.toHaveBeenCalled();
     });
 
     it('should NOT update lastActivity when session has no userId', async () => {

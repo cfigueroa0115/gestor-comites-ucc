@@ -22,7 +22,8 @@ export type SessionType = IronSession<SessionData>;
 
 /**
  * Retrieves the current session from the encrypted cookie.
- * Updates lastActivity on every read for inactivity tracking.
+ * This is a READ-ONLY operation — does not modify cookies.
+ * lastActivity is updated by the middleware (proxy.ts) on each request.
  * Must be called within a server context (Server Component, Server Action, or Route Handler).
  */
 export async function getSession(): Promise<SessionType> {
@@ -39,12 +40,6 @@ export async function getSession(): Promise<SessionType> {
     cookieName: sessionOptions.cookieName,
     cookieOptions: sessionOptions.cookieOptions,
   });
-
-  // Update lastActivity on every session read if session is active
-  if (session.userId) {
-    session.lastActivity = new Date().toISOString();
-    await session.save();
-  }
 
   return session;
 }
