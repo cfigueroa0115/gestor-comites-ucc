@@ -480,9 +480,11 @@ function ActaFormModalInner({
                   setIsVoiceRecording(false);
                   if (text.trim() && voiceSessionId) {
                     await saveTranscriptionAction(voiceSessionId, text, durationSecs);
-                    setVoiceTranscriptPreview(
-                      text.length > 150 ? text.slice(0, 150) + '...' : text
-                    );
+                    // Store full text for preview (show first 300 chars with total count)
+                    const preview = text.length > 300
+                      ? text.slice(0, 300) + `... [${text.length} caracteres totales guardados]`
+                      : text;
+                    setVoiceTranscriptPreview(preview);
                   }
                 }}
                 onCancel={() => {
@@ -494,9 +496,9 @@ function ActaFormModalInner({
 
           {/* Voice transcription preview */}
           {voiceTranscriptPreview && !isVoiceRecording && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-green-700">✅ Transcripción de voz guardada</span>
+                <span className="text-xs font-semibold text-green-700">✅ Transcripción de voz guardada en base de datos</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -508,7 +510,10 @@ function ActaFormModalInner({
                   Eliminar
                 </button>
               </div>
-              <p className="text-xs text-gray-600 italic">&ldquo;{voiceTranscriptPreview}&rdquo;</p>
+              <div className="text-xs text-gray-600 italic max-h-24 overflow-y-auto bg-white rounded p-2 border border-green-100">
+                &ldquo;{voiceTranscriptPreview}&rdquo;
+              </div>
+              <p className="text-[10px] text-green-600">Este texto se enviará al agente IA junto con los documentos adjuntos para generar el acta.</p>
             </div>
           )}
 

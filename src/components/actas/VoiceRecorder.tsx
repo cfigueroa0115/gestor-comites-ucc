@@ -118,20 +118,25 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalText = '';
+      let sessionFinal = '';
       let interim = '';
 
       for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalText += result[0].transcript + ' ';
+          sessionFinal += result[0].transcript + ' ';
         } else {
           interim += result[0].transcript;
         }
       }
 
-      if (finalText) {
-        setTranscript(finalText.trim());
+      // ACCUMULATE: append new final text to the existing transcript
+      if (sessionFinal.trim()) {
+        setTranscript(prev => {
+          const accumulated = prev ? prev + ' ' + sessionFinal.trim() : sessionFinal.trim();
+          transcriptRef.current = accumulated;
+          return accumulated;
+        });
       }
       setInterimText(interim);
     };
