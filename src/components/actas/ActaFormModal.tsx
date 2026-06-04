@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useTransition, useCallback } from 'react';
 import { AttendeesTable, type Attendee, type AttendeesErrors } from '@/components/forms/AttendeesTable';
@@ -604,7 +604,7 @@ function ActaFormModalInner({
                 type="button"
                 onClick={() => setShowVoiceConfirm(true)}
                 disabled={isPending || isVoiceRecording}
-                className="ai-button-glow inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-violet-600 text-white shadow-lg hover:scale-105 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
+                className="ai-button-glow inline-flex items-center justify-center w-12 h-12 rounded-full bg-linear-to-br from-blue-500 via-purple-500 to-violet-600 text-white shadow-lg hover:scale-105 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
                 aria-label="Grabar sesión con IA"
               >
                 {/* Microphone + AI brain SVG icon */}
@@ -646,10 +646,10 @@ function ActaFormModalInner({
 
           {/* Voice Recording Confirmation Dialog */}
           {showVoiceConfirm && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+            <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40">
               <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <div className="shrink-0 w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                       <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
@@ -681,7 +681,7 @@ function ActaFormModalInner({
                       setIsVoiceRecording(true);
                       setVoiceTranscriptPreview(null);
                     }}
-                    className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all"
+                    className="px-4 py-2 text-sm font-semibold text-white bg-linear-to-r from-blue-500 to-purple-600 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all"
                   >
                     Aceptar
                   </button>
