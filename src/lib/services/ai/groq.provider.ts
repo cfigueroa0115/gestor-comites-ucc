@@ -23,32 +23,14 @@ const DEFAULT_MODEL = 'llama-3.1-8b-instant';
  * Builds the system prompt for formal academic minute generation.
  */
 function buildSystemPrompt(): string {
-  return `Eres un redactor experto de actas formales para comités académicos universitarios en Colombia. Tu trabajo es transformar la información en bruto (transcripciones de sesiones, documentos de soporte) en un acta formal profesional.
+  return `Redacta actas formales de comités académicos universitarios en Colombia. Español formal, tercera persona, tiempo pasado.
 
-REGLAS ABSOLUTAS DE REDACCIÓN:
-
-1. FIDELIDAD TOTAL A LOS DATOS: Cada dato, cifra, nombre, fecha, decisión, compromiso y acuerdo mencionado en los documentos o transcripciones DEBE aparecer en el acta. NO omitas información relevante.
-
-2. CIFRAS Y DATOS EXACTOS: Si se mencionan montos ($250 millones), porcentajes (30%), fechas (15 de marzo), cantidades (8 semestres, 160 créditos), plazos (8 días), CÍTALOS TEXTUALMENTE en el acta.
-
-3. NOMBRES PROPIOS: Incluye TODOS los nombres de personas, instituciones, empresas, programas y proyectos mencionados. Si un profesor o funcionario dijo algo, atribúyelo a esa persona.
-
-4. DECISIONES Y ACUERDOS: Toda votación, aprobación, rechazo o acuerdo debe quedar documentado con claridad: quién propuso, quién apoyó, resultado (aprobado por unanimidad, mayoría, etc.).
-
-5. COMPROMISOS Y RESPONSABLES: Cada tarea, compromiso o seguimiento DEBE indicar: qué se debe hacer, quién es el responsable, y el plazo (si se mencionó).
-
-6. FORMATO: Español formal académico colombiano. Tercera persona, tiempo pasado. Texto plano sin markdown. Numeración por puntos del orden del día.
-
-7. ESTRUCTURA:
-   - Apertura: tipo de comité, programa, fecha, hora, lugar, verificación de quórum, listado de asistentes.
-   - Desarrollo: cada punto del orden del día como sección numerada con desarrollo completo.
-   - Cierre: compromisos adquiridos, fecha próxima reunión (si se menciona), hora de finalización.
-
-8. TRANSCRIPCIONES DE VOZ: Si recibes una transcripción de sesión de voz, es el contenido REAL de lo que se habló en la reunión. Extrae TODA la información relevante: temas discutidos, opiniones expresadas, decisiones tomadas, datos mencionados.
-
-9. NO INVENTES: Si la información no está en los documentos ni en la transcripción, NO la agregues. Usa lenguaje neutral: "Se revisó el tema sin que se presentaran observaciones adicionales."
-
-10. EXTENSIÓN: El desarrollo debe ser completo y detallado. Mínimo 3 párrafos por punto. Para puntos con mucha información, desarrolla todo el contenido disponible.`;
+Reglas:
+- Incluye TODOS los datos, cifras, nombres y decisiones de las fuentes proporcionadas.
+- No inventes información. Solo documenta lo que aparece en las fuentes.
+- Estructura: Apertura → Desarrollo por puntos del orden del día → Cierre con compromisos.
+- Atribuye intervenciones a las personas que las realizaron.
+- Texto plano, sin markdown, con numeración.`;
 }
 
 /**
@@ -61,11 +43,8 @@ function buildUserPrompt(input: ActaGenerationInput): string {
     .map((a, i) => `  ${i + 1}. ${a.nombre} – ${a.cargo}`)
     .join('\n');
 
-  let prompt = `GENERA EL ACTA FORMAL COMPLETA para la siguiente sesión de comité:
+  let prompt = `Genera el acta formal para esta sesión de comité:
 
-═══════════════════════════════════════
-DATOS DE LA SESIÓN:
-═══════════════════════════════════════
 TIPO DE COMITÉ: ${tipoComite}
 PROGRAMA: ${areaPrograma}
 FECHA: ${new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -75,25 +54,18 @@ ${asistentesFormatted}
 
 ORDEN DEL DÍA:
 ${ordenDia}
-═══════════════════════════════════════
 `;
 
   const validTexts = attachmentTexts.filter(t => t.trim().length > 0);
   if (validTexts.length > 0) {
-    prompt += `\n═══════════════════════════════════════\nINFORMACIÓN DE LA SESIÓN (documentos y/o transcripción de voz):\n═══════════════════════════════════════\n\n`;
-    prompt += `IMPORTANTE: Esta información contiene los datos REALES de la sesión. Extrae TODOS los datos, cifras, nombres, decisiones, acuerdos y compromisos para incluirlos en el acta.\n\n`;
+    prompt += `\nINFORMACIÓN DE LA SESIÓN:\n\n`;
     validTexts.forEach((text, idx) => {
       const trimmed = text.length > 2500 ? text.substring(0, 2500) + '\n...[contenido continúa]' : text;
-      prompt += `──── FUENTE ${idx + 1} ────\n${trimmed}\n\n`;
+      prompt += `── FUENTE ${idx + 1} ──\n${trimmed}\n\n`;
     });
   }
 
-  prompt += `\n═══════════════════════════════════════\nINSTRUCCIONES FINALES:\n═══════════════════════════════════════\n`;
-  prompt += `- Incluye TODAS las cifras, datos, nombres y decisiones de las fuentes.\n`;
-  prompt += `- Cada punto del orden del día debe desarrollarse con la información REAL proporcionada.\n`;
-  prompt += `- Los acuerdos y compromisos deben quedar explícitos con responsables.\n`;
-  prompt += `- El acta debe reflejar FIELMENTE lo que ocurrió en la sesión.\n`;
-  prompt += `- Genera el texto listo para insertar en un documento Word oficial.\n`;
+  prompt += `\nRedacta el acta basándote exclusivamente en la información proporcionada arriba. Incluye todos los datos, cifras, nombres y decisiones tal como aparecen en las fuentes.`;
 
   return prompt;
 }
@@ -125,7 +97,7 @@ export class GroqProvider implements IAIProvider {
             { role: 'user', content: buildUserPrompt(input) },
           ],
           temperature: 0.3,
-          max_tokens: 6000,
+          max_tokens: 4000,
         }),
         signal: controller.signal,
       });
