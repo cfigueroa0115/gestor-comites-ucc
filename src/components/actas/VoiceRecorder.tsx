@@ -244,17 +244,23 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
   }
 
   return (
-    <div className="rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-blue-50 p-4 space-y-3">
+    <div className="rounded-lg border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-blue-50 p-4 space-y-3 shadow-md">
       {/* Header with recording indicator */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {isRecording && (
-            <span className="recording-dot inline-block w-3 h-3 rounded-full bg-red-500" />
+            <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1.5 rounded-full shadow-lg">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wide">GRABANDO</span>
+            </div>
           )}
           <span className="text-sm font-semibold text-gray-800">
-            {isRecording ? 'Grabando sesión...' : 'Grabación finalizada'}
+            {isRecording ? 'Agente IA escuchando...' : 'Grabación finalizada'}
           </span>
-          <span className="text-xs text-gray-500 font-mono">{formatDuration(duration)}</span>
+          <span className="text-xs text-gray-500 font-mono bg-white px-2 py-0.5 rounded">{formatDuration(duration)}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -263,14 +269,17 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
               <button
                 type="button"
                 onClick={stopRecording}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors"
+                className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors shadow-md flex items-center gap-1.5"
               >
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
                 Detener grabación
               </button>
               <button
                 type="button"
                 onClick={cancelRecording}
-                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancelar
               </button>
