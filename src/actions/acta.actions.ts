@@ -13,6 +13,7 @@ import { documentService } from '@/lib/services/document.service';
 import { getFileStorage } from '@/lib/services/file-storage.service';
 import { generateActaFilename } from '@/lib/utils/filename';
 import { sanitizeInput } from '@/lib/utils/sanitize';
+import { getTranscriptionsBySession } from '@/actions/voice.actions';
 import type { ActionResult, ActaDocxData, ActaGenerationInput } from '@/types';
 import type { Acta } from '@prisma/client';
 
@@ -143,6 +144,7 @@ export async function listActasAction(
 export async function createActaAction(
   formData: ActaFormInput,
   fileTexts?: string[],
+  voiceSessionId?: string,
 ): Promise<ActionResult<{ actaId: string }>> {
   // Require gestor or admin role
   const session = await requireGestor();
@@ -256,6 +258,20 @@ export async function createActaAction(
     // Combine DB texts with any pre-extracted texts passed from the form (local uploads)
     const inlineTexts = (fileTexts || []).filter(t => t.trim().length > 0);
     aiInput.attachmentTexts = [...dbTexts, ...inlineTexts];
+
+    // If a voice session ID was provided, fetch transcriptions and append to AI input
+    if (voiceSessionId) {
+      const voiceResult = await getTranscriptionsBySession(voiceSessionId);
+      if (voiceResult.success && voiceResult.data) {
+        const voiceTexts = voiceResult.data.transcriptions
+          .map(t => t.texto)
+          .filter(t => t.trim().length > 0);
+        if (voiceTexts.length > 0) {
+          const combinedVoice = voiceTexts.join('\n');
+          aiInput.attachmentTexts.push(`[TRANSCRIPCIÓN DE SESIÓN DE VOZ]\n${combinedVoice}`);
+        }
+      }
+    }
 
     const aiResult = await generateActaContentFromForm(aiInput);
     if (!aiResult.success) {

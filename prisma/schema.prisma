@@ -154,3 +154,16 @@ model Sequence {
   @@unique([committeeCode, year])
   @@map("sequences")
 }
+
+model VoiceTranscription {
+  id        String   @id @default(cuid())
+  actaId    String?  @map("acta_id")
+  sessionId String   @map("session_id")
+  texto     String   @db.Text
+  duracion  Int?     @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("voice_transcriptions")
+}

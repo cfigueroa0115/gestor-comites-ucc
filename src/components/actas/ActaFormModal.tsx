@@ -3,8 +3,10 @@
 import { useState, useTransition, useCallback } from 'react';
 import { AttendeesTable, type Attendee, type AttendeesErrors } from '@/components/forms/AttendeesTable';
 import { AttachmentManager } from '@/components/actas/AttachmentManager';
+import { VoiceRecorder } from '@/components/actas/VoiceRecorder';
 import { actaFormSchema, TIPO_COMITE_OPTIONS, AREA_PROGRAMA_OPTIONS } from '@/lib/validations/acta.schema';
 import { createActaAction } from '@/actions/acta.actions';
+import { saveTranscriptionAction } from '@/actions/voice.actions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,6 +110,12 @@ function ActaFormModalInner({
   const [attendeesErrors, setAttendeesErrors] = useState<AttendeesErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [uploadInProgress, setUploadInProgress] = useState(false);
+
+  // Voice recording state
+  const [showVoiceConfirm, setShowVoiceConfirm] = useState(false);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [voiceSessionId, setVoiceSessionId] = useState<string | null>(null);
+  const [voiceTranscriptPreview, setVoiceTranscriptPreview] = useState<string | null>(null);
 
   /**
    * Client-side validation. Returns true if all fields are valid.
@@ -252,7 +260,7 @@ function ActaFormModalInner({
           }
         }
 
-        const result = await createActaAction(zodResult.data, fileTexts);
+        const result = await createActaAction(zodResult.data, fileTexts, voiceSessionId ?? undefined);
 
         if (result.success) {
           onSuccess();
@@ -464,6 +472,46 @@ function ActaFormModalInner({
             <AttachmentManager onUploadStatusChange={setUploadInProgress} onFilesReady={setAttachedFiles} />
           </div>
 
+          {/* Voice Recorder (shown inline when recording) */}
+          {isVoiceRecording && (
+            <div className="space-y-1">
+              <VoiceRecorder
+                onRecordingComplete={async (text, durationSecs) => {
+                  setIsVoiceRecording(false);
+                  if (text.trim() && voiceSessionId) {
+                    await saveTranscriptionAction(voiceSessionId, text, durationSecs);
+                    setVoiceTranscriptPreview(
+                      text.length > 150 ? text.slice(0, 150) + '...' : text
+                    );
+                  }
+                }}
+                onCancel={() => {
+                  setIsVoiceRecording(false);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Voice transcription preview */}
+          {voiceTranscriptPreview && !isVoiceRecording && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-green-700">✅ Transcripción de voz guardada</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVoiceTranscriptPreview(null);
+                    setVoiceSessionId(null);
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  Eliminar
+                </button>
+              </div>
+              <p className="text-xs text-gray-600 italic">&ldquo;{voiceTranscriptPreview}&rdquo;</p>
+            </div>
+          )}
+
           {/* Proyectó */}
           <div className="space-y-1">
             <label htmlFor="proyecto" className="block text-sm font-semibold text-gray-700">
@@ -549,9 +597,37 @@ function ActaFormModalInner({
             >
               Cancelar
             </button>
+
+            {/* AI Voice Recording Button */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setShowVoiceConfirm(true)}
+                disabled={isPending || isVoiceRecording}
+                className="ai-button-glow inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-violet-600 text-white shadow-lg hover:scale-105 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
+                aria-label="Grabar sesión con IA"
+              >
+                {/* Microphone + AI brain SVG icon */}
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Microphone */}
+                  <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  {/* AI sparkles */}
+                  <path d="M5 3l.5 1 .5-1 .5 1 .5-1" strokeWidth="1" />
+                  <path d="M18 2l.5 1 .5-1" strokeWidth="1" />
+                  <circle cx="19" cy="5" r="0.5" fill="currentColor" />
+                </svg>
+              </button>
+              {/* Tooltip */}
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                Grabar sesión con IA
+              </span>
+            </div>
+
             <button
               type="submit"
-              disabled={isPending || uploadInProgress}
+              disabled={isPending || uploadInProgress || isVoiceRecording}
               className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-ucc-green rounded-lg hover:bg-ucc-green-dark transition-colors duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPending ? (
@@ -567,6 +643,52 @@ function ActaFormModalInner({
               )}
             </button>
           </div>
+
+          {/* Voice Recording Confirmation Dialog */}
+          {showVoiceConfirm && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm mx-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                      <line x1="12" y1="18" x2="12" y2="22" />
+                    </svg>
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900">Agente IA de Voz</h3>
+                </div>
+                <p className="text-sm text-gray-600">
+                  ¿Desea grabar la sesión con el agente IA?
+                </p>
+                <p className="text-xs text-gray-500">
+                  El micrófono capturará la conversación del comité y la transcripción se utilizará para generar automáticamente el desarrollo del acta junto con los documentos adjuntos.
+                </p>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceConfirm(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sessionId = crypto.randomUUID();
+                      setVoiceSessionId(sessionId);
+                      setShowVoiceConfirm(false);
+                      setIsVoiceRecording(true);
+                      setVoiceTranscriptPreview(null);
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all"
+                  >
+                    Aceptar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -89,3 +89,25 @@ body {
   z-index: 1;
 }
 
+
+/* =========================================================================
+   AI Voice Recording Button Glow Animation
+   ========================================================================= */
+
+@keyframes ai-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.5), 0 0 10px rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.8), 0 0 25px rgba(59, 130, 246, 0.5); }
+}
+
+.ai-button-glow {
+  animation: ai-glow 2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.recording-dot {
+  animation: recording-pulse 1s ease-in-out infinite;
+}
