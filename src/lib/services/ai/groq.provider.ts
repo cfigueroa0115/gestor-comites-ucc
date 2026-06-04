@@ -23,14 +23,23 @@ const DEFAULT_MODEL = 'llama-3.1-8b-instant';
  * Builds the system prompt for formal academic minute generation.
  */
 function buildSystemPrompt(): string {
-  return `Redacta actas formales de comités académicos universitarios en Colombia. Español formal, tercera persona, tiempo pasado.
+  return `Eres un redactor profesional de actas de comités académicos universitarios en Colombia.
 
-Reglas:
-- Incluye TODOS los datos, cifras, nombres y decisiones de las fuentes proporcionadas.
-- No inventes información. Solo documenta lo que aparece en las fuentes.
-- Estructura: Apertura → Desarrollo por puntos del orden del día → Cierre con compromisos.
-- Atribuye intervenciones a las personas que las realizaron.
-- Texto plano, sin markdown, con numeración.`;
+Tu tarea: Generar la sección DESARROLLO DE LA SESIÓN de un acta formal.
+
+Formato: Español formal colombiano, tercera persona, tiempo pasado, texto plano sin markdown.
+
+Estructura obligatoria:
+1. APERTURA: Indica comité, programa, fecha, lugar, quórum verificado y asistentes presentes.
+2. DESARROLLO: Sigue EXACTAMENTE los puntos del ORDEN DEL DÍA como secciones numeradas. Para cada punto, desarrolla el contenido basándote en la información de las fuentes adjuntas.
+3. CIERRE: Compromisos adquiridos con responsables, y cierre formal de la sesión.
+
+Reglas de contenido:
+- Usa ÚNICAMENTE información que aparezca en las fuentes proporcionadas (documentos adjuntos y/o transcripción de voz).
+- Incluye todas las cifras, nombres, fechas y decisiones tal como aparecen en las fuentes.
+- Atribuye las intervenciones a quien las realizó cuando el nombre aparezca en las fuentes.
+- Si para un punto del orden del día no hay información en las fuentes, indica brevemente que se revisó el tema.
+- NO inventes datos, cifras ni decisiones que no estén en las fuentes.`;
 }
 
 /**
@@ -43,29 +52,28 @@ function buildUserPrompt(input: ActaGenerationInput): string {
     .map((a, i) => `  ${i + 1}. ${a.nombre} – ${a.cargo}`)
     .join('\n');
 
-  let prompt = `Genera el acta formal para esta sesión de comité:
+  let prompt = `Genera el DESARROLLO DE LA SESIÓN para esta acta de comité. Usa los puntos del ORDEN DEL DÍA como estructura principal.
 
-TIPO DE COMITÉ: ${tipoComite}
-PROGRAMA: ${areaPrograma}
+COMITÉ: ${tipoComite} | PROGRAMA: ${areaPrograma}
 FECHA: ${new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: 'long', day: 'numeric' })}
 
-ASISTENTES (${asistentes.length}):
+ASISTENTES:
 ${asistentesFormatted}
 
-ORDEN DEL DÍA:
+ORDEN DEL DÍA (usa estos puntos como estructura del desarrollo):
 ${ordenDia}
 `;
 
   const validTexts = attachmentTexts.filter(t => t.trim().length > 0);
   if (validTexts.length > 0) {
-    prompt += `\nINFORMACIÓN DE LA SESIÓN:\n\n`;
+    prompt += `\nFUENTES DE INFORMACIÓN (documenta basándote en este contenido):\n\n`;
     validTexts.forEach((text, idx) => {
-      const trimmed = text.length > 2500 ? text.substring(0, 2500) + '\n...[contenido continúa]' : text;
-      prompt += `── FUENTE ${idx + 1} ──\n${trimmed}\n\n`;
+      const trimmed = text.length > 2500 ? text.substring(0, 2500) + '\n...' : text;
+      prompt += `[Fuente ${idx + 1}]\n${trimmed}\n\n`;
     });
   }
 
-  prompt += `\nRedacta el acta basándote exclusivamente en la información proporcionada arriba. Incluye todos los datos, cifras, nombres y decisiones tal como aparecen en las fuentes.`;
+  prompt += `Desarrolla cada punto del orden del día usando la información de las fuentes. Incluye datos exactos, nombres y decisiones.`;
 
   return prompt;
 }
