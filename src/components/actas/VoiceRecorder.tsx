@@ -80,7 +80,6 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptRef = useRef('');
-  const processedIndexRef = useRef(0); // Track which results have been processed
 
   // Keep ref in sync with state for use in callbacks
   useEffect(() => {
@@ -111,60 +110,51 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
     setTranscript('');
     setInterimText('');
     setDuration(0);
-    processedIndexRef.current = 0;
     transcriptRef.current = '';
 
     const recognition = new SpeechRecognitionClass();
-    recognition.continuous = true;
+    // NOT continuous - we manually restart to avoid mobile duplication bug
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'es-CO';
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let newFinalText = '';
       let interim = '';
 
-      // Only process results we haven't seen yet
-      for (let i = processedIndexRef.current; i < event.results.length; i++) {
+      // Get the last result (the newest one)
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          newFinalText += result[0].transcript + ' ';
-          processedIndexRef.current = i + 1; // Mark as processed
+          // Append final result to transcript
+          const finalText = result[0].transcript.trim();
+          if (finalText) {
+            transcriptRef.current = transcriptRef.current
+              ? transcriptRef.current + '. ' + finalText
+              : finalText;
+            setTranscript(transcriptRef.current);
+          }
         } else {
-          interim += result[0].transcript;
+          interim = result[0].transcript;
         }
-      }
-
-      // Append only NEW final text to accumulated transcript
-      if (newFinalText.trim()) {
-        setTranscript(prev => {
-          const accumulated = prev ? prev + ' ' + newFinalText.trim() : newFinalText.trim();
-          transcriptRef.current = accumulated;
-          return accumulated;
-        });
       }
       setInterimText(interim);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === 'no-speech') {
-        // Ignore no-speech errors, they happen naturally
-        return;
-      }
-      if (event.error === 'aborted') {
+      if (event.error === 'no-speech' || event.error === 'aborted') {
         return;
       }
       setError(`Error de reconocimiento: ${event.error}`);
     };
 
     recognition.onend = () => {
-      // If still recording (not manually stopped), restart
+      // Auto-restart if still in recording mode (not manually stopped)
       if (recognitionRef.current === recognition) {
         try {
-          processedIndexRef.current = 0; // Reset index for new recognition session
           recognition.start();
         } catch {
-          // Recognition may have been explicitly stopped
+          // May have been explicitly stopped
         }
       }
     };
