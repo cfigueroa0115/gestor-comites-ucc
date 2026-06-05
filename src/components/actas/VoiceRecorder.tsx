@@ -53,6 +53,8 @@ interface VoiceRecorderProps {
   onRecordingComplete: (text: string, durationSeconds: number) => void;
   /** Called when user cancels / stops recording */
   onCancel: () => void;
+  /** Called periodically (every 30s) with accumulated text for auto-save */
+  onPartialSave?: (text: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ interface VoiceRecorderProps {
  * - Browser compatibility handling (Chrome, Edge)
  * - Accumulates all recognized text until stopped
  */
-export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderProps) {
+export function VoiceRecorder({ onRecordingComplete, onCancel, onPartialSave }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -79,6 +81,8 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSavedRef = useRef('');
   const transcriptRef = useRef('');
 
   // Keep ref in sync with state for use in callbacks
@@ -164,15 +168,27 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
       recognitionRef.current = recognition;
       setIsRecording(true);
       startTimeRef.current = Date.now();
+      lastSavedRef.current = '';
 
       // Start duration timer
       timerRef.current = setInterval(() => {
         setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
+
+      // Auto-save every 30 seconds to prevent data loss on long sessions
+      if (onPartialSave) {
+        autoSaveRef.current = setInterval(() => {
+          const currentText = transcriptRef.current;
+          if (currentText && currentText !== lastSavedRef.current) {
+            onPartialSave(currentText);
+            lastSavedRef.current = currentText;
+          }
+        }, 30000);
+      }
     } catch {
       setError('No se pudo iniciar el reconocimiento de voz. Verifica los permisos del micrófono.');
     }
-  }, [getSpeechRecognition]);
+  }, [getSpeechRecognition, onPartialSave]);
 
   /**
    * Stop recording and return transcription
@@ -180,13 +196,18 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
   const stopRecording = useCallback(() => {
     if (recognitionRef.current) {
       const ref = recognitionRef.current;
-      recognitionRef.current = null; // prevent restart in onend
+      recognitionRef.current = null;
       ref.stop();
     }
 
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+
+    if (autoSaveRef.current) {
+      clearInterval(autoSaveRef.current);
+      autoSaveRef.current = null;
     }
 
     setIsRecording(false);
@@ -215,6 +236,11 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
       timerRef.current = null;
     }
 
+    if (autoSaveRef.current) {
+      clearInterval(autoSaveRef.current);
+      autoSaveRef.current = null;
+    }
+
     setIsRecording(false);
     onCancel();
   }, [onCancel]);
@@ -230,6 +256,9 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
       }
       if (timerRef.current) {
         clearInterval(timerRef.current);
+      }
+      if (autoSaveRef.current) {
+        clearInterval(autoSaveRef.current);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

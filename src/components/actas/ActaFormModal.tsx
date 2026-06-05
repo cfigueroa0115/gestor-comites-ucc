@@ -480,7 +480,6 @@ function ActaFormModalInner({
                   setIsVoiceRecording(false);
                   if (text.trim() && voiceSessionId) {
                     await saveTranscriptionAction(voiceSessionId, text, durationSecs);
-                    // Store full text for preview (show first 300 chars with total count)
                     const preview = text.length > 300
                       ? text.slice(0, 300) + `... [${text.length} caracteres totales guardados]`
                       : text;
@@ -489,6 +488,12 @@ function ActaFormModalInner({
                 }}
                 onCancel={() => {
                   setIsVoiceRecording(false);
+                }}
+                onPartialSave={async (text) => {
+                  // Auto-save every 30 seconds during long recordings
+                  if (text.trim() && voiceSessionId) {
+                    await saveTranscriptionAction(voiceSessionId, text, 0);
+                  }
                 }}
               />
             </div>
