@@ -31,15 +31,21 @@ Formato: Español formal colombiano, tercera persona, tiempo pasado, texto plano
 
 Estructura obligatoria:
 1. APERTURA: Indica comité, programa, fecha, lugar, quórum verificado y asistentes presentes.
-2. DESARROLLO: Sigue EXACTAMENTE los puntos del ORDEN DEL DÍA como secciones numeradas. Para cada punto, desarrolla el contenido basándote en la información de las fuentes adjuntas.
+2. DESARROLLO: Sigue EXACTAMENTE los puntos del ORDEN DEL DÍA como secciones numeradas. Para cada punto, desarrolla el contenido basándote en la información de las fuentes.
 3. CIERRE: Compromisos adquiridos con responsables, y cierre formal de la sesión.
 
 Reglas de contenido:
-- Usa ÚNICAMENTE información que aparezca en las fuentes proporcionadas (documentos adjuntos y/o transcripción de voz).
+- Usa ÚNICAMENTE información de las fuentes proporcionadas (documentos, transcripciones de audio/video, grabación de voz).
 - Incluye todas las cifras, nombres, fechas y decisiones tal como aparecen en las fuentes.
-- Atribuye las intervenciones a quien las realizó cuando el nombre aparezca en las fuentes.
-- Si para un punto del orden del día no hay información en las fuentes, indica brevemente que se revisó el tema.
-- NO inventes datos, cifras ni decisiones que no estén en las fuentes.`;
+- Atribuye las intervenciones a quien las realizó.
+- Si para un punto no hay información en las fuentes, indica brevemente que se revisó el tema.
+- NO inventes datos que no estén en las fuentes.
+
+Reglas de calidad:
+- Si recibes múltiples fuentes con contenido similar o repetido, UNIFICA la información sin duplicar párrafos.
+- Clasifica y organiza la información por punto del orden del día, sin repetir lo mismo en diferentes secciones.
+- Redacta de forma fluida, coherente y profesional. Evita redundancias.
+- El acta debe tener alto nivel de redacción académica institucional.`;
 }
 
 /**
@@ -66,14 +72,16 @@ ${ordenDia}
 
   const validTexts = attachmentTexts.filter(t => t.trim().length > 0);
   if (validTexts.length > 0) {
-    prompt += `\nFUENTES DE INFORMACIÓN (documenta basándote en este contenido):\n\n`;
+    prompt += `\nFUENTES DE INFORMACIÓN DE LA SESIÓN:\n`;
+    prompt += `(Pueden venir de: documentos adjuntos, transcripción de audio/video, o grabación de voz en vivo.\n`;
+    prompt += `Si hay contenido repetido entre fuentes, UNIFICA sin duplicar. Clasifica por punto del orden del día.)\n\n`;
     validTexts.forEach((text, idx) => {
       const trimmed = text.length > 2500 ? text.substring(0, 2500) + '\n...' : text;
       prompt += `[Fuente ${idx + 1}]\n${trimmed}\n\n`;
     });
   }
 
-  prompt += `Desarrolla cada punto del orden del día usando la información de las fuentes. Incluye datos exactos, nombres y decisiones.`;
+  prompt += `Desarrolla cada punto del orden del día con la información de las fuentes. No repitas contenido entre secciones. Incluye datos, nombres y decisiones. Redacción académica de alta calidad.`;
 
   return prompt;
 }
