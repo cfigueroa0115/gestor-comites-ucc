@@ -115,8 +115,17 @@ export function DashboardCards({ userRole }: DashboardCardsProps) {
               key={mod.title}
               type="button"
               onClick={() => setModalOpen(true)}
-              className="block w-full rounded-institutional bg-white p-6 shadow-card transition-all duration-300 hover:scale-105 hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-ucc-green cursor-pointer"
+              className="relative block w-full rounded-institutional bg-white p-6 shadow-card transition-all duration-300 hover:scale-105 hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-ucc-green cursor-pointer"
             >
+              {/* Construction badge - external top-right */}
+              <div className="absolute -top-2 -right-2 z-10">
+                <span className="flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold uppercase px-2 py-1 rounded-full shadow-md animate-pulse">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  En construcción
+                </span>
+              </div>
               <div className="flex flex-col items-center text-center gap-4">
                 {mod.icon}
                 <h2 className="text-lg font-semibold text-gray-900">
