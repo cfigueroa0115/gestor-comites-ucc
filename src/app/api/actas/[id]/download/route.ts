@@ -83,7 +83,10 @@ export async function GET(
     };
 
     // 6. Generate the .docx document on-the-fly
-    const generatedDoc = await documentService.generateActaDocx(docxData);
+    // Determine template based on committee type
+    const { COMMITTEE_PREFIXES } = await import('@/lib/utils/constants');
+    const prefix = COMMITTEE_PREFIXES[acta.tipoComite as keyof typeof COMMITTEE_PREFIXES] || 'CUR';
+    const generatedDoc = await documentService.generateActaDocx(docxData, prefix);
 
     // 7. Update Estado_Acta to 'Descargada'
     await prisma.acta.update({

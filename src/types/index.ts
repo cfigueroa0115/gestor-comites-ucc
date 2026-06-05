@@ -64,7 +64,7 @@ export interface ActionResult<T = void> {
 // ---------------------------------------------------------------------------
 
 /** Committee type identifiers used for sequence numbering and AI context. */
-export type TipoComite = 'Curricular' | 'Investigación' | 'Decanatura' | 'Otro';
+export type TipoComite = 'Curricular' | 'Investigación' | 'Consejo de Facultad';
 
 /** Input for AI-based acta content generation. */
 export interface ActaGenerationInput {
@@ -137,7 +137,7 @@ export interface GeneratedDocument {
 }
 
 export interface IDocumentGenerator {
-  generateActaDocx(data: ActaDocxData): Promise<GeneratedDocument>;
+  generateActaDocx(data: ActaDocxData, committeePrefix?: string): Promise<GeneratedDocument>;
 }
 
 // ---------------------------------------------------------------------------

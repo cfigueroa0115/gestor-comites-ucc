@@ -100,8 +100,7 @@ export const PAGINATION = {
 export const COMMITTEE_PREFIXES = {
   Curricular: 'CUR',
   Investigación: 'INV',
-  Decanatura: 'DEC',
-  Otro: 'OTR',
+  'Consejo de Facultad': 'COF',
 } as const;
 
 export type CommitteePrefix = (typeof COMMITTEE_PREFIXES)[keyof typeof COMMITTEE_PREFIXES];
@@ -110,8 +109,7 @@ export type CommitteePrefix = (typeof COMMITTEE_PREFIXES)[keyof typeof COMMITTEE
 export const COMMITTEE_TYPES = [
   'Curricular',
   'Investigación',
-  'Decanatura',
-  'Otro',
+  'Consejo de Facultad',
 ] as const;
 
 /** Available academic programs. */
@@ -119,6 +117,7 @@ export const PROGRAMS = [
   'Ingeniería Industrial',
   'Ingeniería Electrónica',
   'Ingeniería Ambiental',
+  'Facultad de Ingeniería',
 ] as const;
 
 // ---------------------------------------------------------------------------

@@ -14,8 +14,17 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import type { IDocumentGenerator, ActaDocxData, GeneratedDocument } from '@/types';
 
-/** Path to the institutional template file. */
-const TEMPLATE_PATH = path.join(process.cwd(), 'templates', 'acta-comite-curricular-ing-industrial.docx');
+/** Path to the institutional template files. */
+const TEMPLATES_DIR = path.join(process.cwd(), 'templates');
+
+/** Template mapping by committee type prefix */
+const TEMPLATE_FILES: Record<string, string> = {
+  'CUR': 'acta-comite-curricular-ing-industrial.docx',
+  'INV': 'acta-comite-curricular-ing-industrial.docx',
+  'COF': 'acta-consejo-de-facultad-ingenieria.docx',
+};
+
+const DEFAULT_TEMPLATE = 'acta-comite-curricular-ing-industrial.docx';
 
 /**
  * All placeholder tags defined in the institutional template.
@@ -87,15 +96,18 @@ export function buildTemplateData(data: ActaDocxData): Record<string, string> {
  * @returns Buffer containing the template file content
  * @throws Error if template file is missing or unreadable
  */
-function loadTemplate(): Buffer {
-  if (!fs.existsSync(TEMPLATE_PATH)) {
+function loadTemplate(committeePrefix?: string): Buffer {
+  const templateFile = (committeePrefix && TEMPLATE_FILES[committeePrefix]) || DEFAULT_TEMPLATE;
+  const templatePath = path.join(TEMPLATES_DIR, templateFile);
+
+  if (!fs.existsSync(templatePath)) {
     throw new Error(
-      `Template not found: ${TEMPLATE_PATH}. Ensure the institutional template file exists in the templates/ directory.`
+      `Template not found: ${templatePath}. Ensure the institutional template file exists in the templates/ directory.`
     );
   }
 
   try {
-    return fs.readFileSync(TEMPLATE_PATH);
+    return fs.readFileSync(templatePath);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown read error';
     throw new Error(`Failed to read template file: ${message}`);
@@ -117,9 +129,9 @@ export const documentService: IDocumentGenerator = {
    * @returns GeneratedDocument with buffer, filename, and size
    * @throws Error if template is missing, corrupted, or generation fails
    */
-  async generateActaDocx(data: ActaDocxData): Promise<GeneratedDocument> {
-    // Load the template file
-    const templateBuffer = loadTemplate();
+  async generateActaDocx(data: ActaDocxData, committeePrefix?: string): Promise<GeneratedDocument> {
+    // Load the template file (selects based on committee type)
+    const templateBuffer = loadTemplate(committeePrefix);
 
     // Parse the template with PizZip
     let zip: PizZip;

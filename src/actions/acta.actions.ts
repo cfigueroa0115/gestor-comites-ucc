@@ -295,7 +295,7 @@ export async function createActaAction(
       copia: data.copia,
     };
 
-    const generatedDoc = await documentService.generateActaDocx(docxData);
+    const generatedDoc = await documentService.generateActaDocx(docxData, committeePrefix);
 
     // Generate the proper output filename
     const docxFilename = generateActaFilename(

@@ -6,8 +6,7 @@ import { z } from 'zod';
 const tipoComiteValues = [
   'Curricular',
   'Investigación',
-  'Decanatura',
-  'Otro',
+  'Consejo de Facultad',
 ] as const;
 
 /**
@@ -17,6 +16,7 @@ const areaProgramaValues = [
   'Ingeniería Industrial',
   'Ingeniería Electrónica',
   'Ingeniería Ambiental',
+  'Facultad de Ingeniería',
 ] as const;
 
 /**
