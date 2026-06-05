@@ -80,6 +80,7 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptRef = useRef('');
+  const processedIndexRef = useRef(0); // Track which results have been processed
 
   // Keep ref in sync with state for use in callbacks
   useEffect(() => {
@@ -110,6 +111,8 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
     setTranscript('');
     setInterimText('');
     setDuration(0);
+    processedIndexRef.current = 0;
+    transcriptRef.current = '';
 
     const recognition = new SpeechRecognitionClass();
     recognition.continuous = true;
@@ -118,22 +121,24 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let sessionFinal = '';
+      let newFinalText = '';
       let interim = '';
 
-      for (let i = 0; i < event.results.length; i++) {
+      // Only process results we haven't seen yet
+      for (let i = processedIndexRef.current; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          sessionFinal += result[0].transcript + ' ';
+          newFinalText += result[0].transcript + ' ';
+          processedIndexRef.current = i + 1; // Mark as processed
         } else {
           interim += result[0].transcript;
         }
       }
 
-      // ACCUMULATE: append new final text to the existing transcript
-      if (sessionFinal.trim()) {
+      // Append only NEW final text to accumulated transcript
+      if (newFinalText.trim()) {
         setTranscript(prev => {
-          const accumulated = prev ? prev + ' ' + sessionFinal.trim() : sessionFinal.trim();
+          const accumulated = prev ? prev + ' ' + newFinalText.trim() : newFinalText.trim();
           transcriptRef.current = accumulated;
           return accumulated;
         });
@@ -156,6 +161,7 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
       // If still recording (not manually stopped), restart
       if (recognitionRef.current === recognition) {
         try {
+          processedIndexRef.current = 0; // Reset index for new recognition session
           recognition.start();
         } catch {
           // Recognition may have been explicitly stopped
