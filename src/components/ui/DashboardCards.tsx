@@ -169,30 +169,52 @@ export function DashboardCards({ userRole }: DashboardCardsProps) {
           aria-modal="true"
           aria-labelledby="modal-title"
         >
-          <div className="bg-white rounded-institutional p-8 shadow-card-hover max-w-sm w-full mx-4 text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/logo-ucc.jpeg"
-              alt="Logo UCC"
-              className="mx-auto mb-4 w-16 h-16 rounded-lg"
-            />
-            <h2
-              id="modal-title"
-              className="text-xl font-semibold text-gray-900 mb-4"
-            >
-              Módulo en construcción
-            </h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Este módulo se encuentra actualmente en desarrollo. Estará
-              disponible próximamente.
-            </p>
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="rounded-institutional bg-ucc-green px-6 py-2 text-white font-medium transition-all duration-300 hover:bg-ucc-green-dark focus:outline-none focus:ring-2 focus:ring-ucc-green"
-            >
-              Cerrar
-            </button>
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 overflow-hidden">
+            {/* Warning header band */}
+            <div className="bg-amber-50 border-b border-amber-200 px-6 py-4 flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h2 id="modal-title" className="text-base font-bold text-amber-800">
+                  ⚠️ Módulo en construcción
+                </h2>
+                <p className="text-xs text-amber-600 font-medium">En desarrollo</p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 text-center">
+              {/* Construction icon */}
+              <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-orange-50 flex items-center justify-center">
+                <svg className="w-9 h-9 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-2">
+                Este módulo se encuentra actualmente en
+              </p>
+              <p className="text-sm font-semibold text-red-600 mb-4">
+                🚧 Fase de desarrollo y construcción
+              </p>
+              <p className="text-xs text-gray-500">
+                Estará disponible próximamente. Agradecemos su paciencia.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="rounded-lg bg-ucc-green px-8 py-2.5 text-sm text-white font-semibold transition-all duration-300 hover:bg-ucc-green-dark focus:outline-none focus:ring-2 focus:ring-ucc-green shadow-md"
+              >
+                Entendido
+              </button>
+            </div>
           </div>
         </div>
       )}
