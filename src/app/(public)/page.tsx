@@ -5,18 +5,23 @@ export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-white bg-digital-pattern bg-digital-dots">
       {/* Header */}
-      <header className="w-full bg-ucc-green py-4 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl flex items-center gap-3">
+      <header className="w-full bg-gradient-to-r from-ucc-green to-ucc-green-dark py-3 px-4 sm:px-6 lg:px-8 shadow-md">
+        <div className="mx-auto max-w-7xl flex items-center gap-4">
           <Image
             src="/images/logo-ucc.jpeg"
             alt="Logo Universidad Cooperativa de Colombia"
-            width={40}
-            height={40}
-            className="rounded-sm bg-white p-0.5"
+            width={52}
+            height={52}
+            className="rounded-lg"
           />
-          <span className="text-sm font-medium text-white sm:text-base">
-            Universidad Cooperativa de Colombia
-          </span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-white sm:text-lg tracking-tight">
+              Universidad Cooperativa de Colombia
+            </span>
+            <span className="text-[11px] text-green-200 font-medium hidden sm:inline">
+              Facultad de Ingeniería
+            </span>
+          </div>
         </div>
       </header>
 
