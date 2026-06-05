@@ -81,9 +81,15 @@ export async function extractText(
   mimeType: string,
   extension: string
 ): Promise<string> {
-  // Media files are not supported for text extraction
+  // Audio/Video files: try transcription with Whisper via Groq
   if (isMediaMimeType(mimeType)) {
-    return '';
+    try {
+      const { transcribeAudio } = await import('./audio-transcriber');
+      const transcript = await transcribeAudio(buffer, `file${extension}`, mimeType);
+      return transcript;
+    } catch {
+      return '';
+    }
   }
 
   try {
@@ -117,14 +123,15 @@ export async function extractText(
 }
 
 /**
- * Determines if a MIME type represents a media file that should be marked
- * as 'no_soportado' for processing status.
- *
- * @param mimeType - The MIME type to check
- * @returns true if the MIME type is a media type (image/audio/video)
+ * Determines if a MIME type represents a media file.
+ * Note: Media files are now SUPPORTED via Whisper transcription.
+ * This function is kept for backward compatibility but returns false
+ * so media files go through the extraction pipeline.
  */
 export function isUnsupportedMediaType(mimeType: string): boolean {
-  return isMediaMimeType(mimeType);
+  // Media files are now supported via audio transcription (Whisper)
+  // Return false so they pass through the extraction pipeline
+  return false;
 }
 
 // ---------------------------------------------------------------------------
