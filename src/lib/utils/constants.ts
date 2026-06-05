@@ -79,7 +79,7 @@ export const MEDIA_EXTENSIONS: AllowedExtension[] = [
 export const MAX_FILE_COUNT = 20;
 
 /** Default max file size in MB (overridable via MAX_FILE_SIZE_MB env var). */
-export const DEFAULT_MAX_FILE_SIZE_MB = 10;
+export const DEFAULT_MAX_FILE_SIZE_MB = 500;
 
 // ---------------------------------------------------------------------------
 // Pagination Defaults
