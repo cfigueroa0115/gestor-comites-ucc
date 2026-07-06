@@ -95,7 +95,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
     recognition.continuous = !isMobile;
     recognition.interimResults = true;
-    recognition.lang = 'es';  // Generic Spanish for better recognition
+    recognition.lang = 'es-419';  // Latin American Spanish - prevents English fallback
     recognition.maxAlternatives = 1;
 
     let processedIndex = 0;
@@ -120,9 +120,14 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setError(`Error: ${event.error}`);
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        return; // Normal, ignore
       }
+      if (event.error === 'network') {
+        // Network error - auto retry silently, don't show error to user
+        return;
+      }
+      setError(`Error: ${event.error}. Intenta guardar y grabar de nuevo.`);
     };
 
     recognition.onend = () => {
