@@ -3,45 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ---------------------------------------------------------------------------
-// Types - Web Speech API
-// ---------------------------------------------------------------------------
-
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-interface SpeechRecognitionResultList {
-  length: number;
-  [index: number]: SpeechRecognitionResult;
-}
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  [index: number]: SpeechRecognitionAlternative;
-}
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-interface ISpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -55,131 +16,114 @@ interface VoiceRecorderProps {
 // ---------------------------------------------------------------------------
 
 /**
- * VoiceRecorder - Hybrid approach for voice transcription.
+ * VoiceRecorder - Real-time voice transcription using MediaRecorder + Groq Whisper.
  *
- * DUAL ENGINE:
- * 1. Web Speech API → Shows text immediately on screen (visual feedback).
- *    If it stalls, no problem — it's only for preview.
- * 2. MediaRecorder → Records complete audio in background.
- *    On "Guardar", sends full audio to Whisper for HIGH QUALITY transcription.
+ * Architecture:
+ * - MediaRecorder captures audio in 3-second chunks
+ * - Each chunk is sent IMMEDIATELY to /api/voice/transcribe (Whisper)
+ * - Whisper returns text in ~1-2 seconds per chunk
+ * - Text appears progressively as each chunk is transcribed
+ * - Multiple chunks are processed IN PARALLEL for speed
+ * - On save, all accumulated text is stored to DB
  *
- * This gives the user:
- * - IMMEDIATE visual feedback while speaking (Web Speech API)
- * - HIGH QUALITY final transcription (Whisper on complete audio)
- * - NEVER freezes the UI (MediaRecorder always works)
+ * This eliminates Web Speech API entirely — no more freezing/stalling.
+ * Trade-off: ~3-4 second latency before first text appears (Whisper processing)
+ * but NEVER freezes and transcription quality is far superior.
  */
 export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [previewText, setPreviewText] = useState('');
-  const [interimText, setInterimText] = useState('');
+  const [currentText, setCurrentText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [savedSegments, setSavedSegments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [savingStep, setSavingStep] = useState('');
+  const [activeTranscriptions, setActiveTranscriptions] = useState(0);
 
-  // Refs
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const previewTextRef = useRef('');
+  const textRef = useRef('');
   const isRecordingRef = useRef(false);
+  const chunkIndexRef = useRef(0);
+  const transcribedChunksRef = useRef<Map<number, string>>(new Map());
+  const nextExpectedRef = useRef(0);
 
-  useEffect(() => { previewTextRef.current = previewText; }, [previewText]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
 
-  // -----------------------------------------------------------------------
-  // Web Speech API (preview only — not critical if it stalls)
-  // -----------------------------------------------------------------------
-
-  const startSpeechPreview = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return; // Not supported — that's fine, Whisper handles it
-
-    const recognition = new SR() as ISpeechRecognition;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'es-419';
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      if (!isRecordingRef.current) return;
-      let finalText = '';
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalText += result[0].transcript.trim() + '. ';
-        } else {
-          interim += result[0].transcript;
-        }
+  /**
+   * Rebuilds the full text from transcribed chunks in order.
+   * This ensures text appears in the correct chronological order
+   * even if chunks are transcribed out of order.
+   */
+  const rebuildText = useCallback(() => {
+    const chunks = transcribedChunksRef.current;
+    let text = '';
+    let i = 0;
+    while (chunks.has(i)) {
+      const chunkText = chunks.get(i)!;
+      if (chunkText) {
+        text = text ? text + ' ' + chunkText : chunkText;
       }
-      if (finalText) {
-        previewTextRef.current = previewTextRef.current
-          ? previewTextRef.current + ' ' + finalText.trim()
-          : finalText.trim();
-        setPreviewText(previewTextRef.current);
-      }
-      setInterimText(interim);
-    };
+      i++;
+    }
+    nextExpectedRef.current = i;
+    textRef.current = text;
+    setCurrentText(text);
+  }, []);
 
-    recognition.onerror = () => {
-      // Ignore all errors — this is just preview
-    };
+  /**
+   * Sends a single audio chunk to Whisper for transcription.
+   * Runs in parallel — multiple chunks can be transcribing at once.
+   */
+  const transcribeChunk = useCallback(async (blob: Blob, index: number) => {
+    if (blob.size < 500) {
+      // Very small chunk (likely silence) — mark as empty
+      transcribedChunksRef.current.set(index, '');
+      rebuildText();
+      return;
+    }
 
-    recognition.onend = () => {
-      setInterimText('');
-      // Auto-restart if still recording (best effort)
-      if (isRecordingRef.current) {
-        setTimeout(() => {
-          if (isRecordingRef.current && recognitionRef.current === recognition) {
-            try {
-              const newRecognition = new SR() as ISpeechRecognition;
-              newRecognition.continuous = true;
-              newRecognition.interimResults = true;
-              newRecognition.lang = 'es-419';
-              newRecognition.maxAlternatives = 1;
-              newRecognition.onresult = recognition.onresult;
-              newRecognition.onerror = recognition.onerror;
-              newRecognition.onend = recognition.onend;
-              newRecognition.start();
-              recognitionRef.current = newRecognition;
-            } catch { /* give up on preview */ }
-          }
-        }, 300);
-      }
-    };
+    setActiveTranscriptions(prev => prev + 1);
 
     try {
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch { /* Not critical */ }
-  }, []);
+      const formData = new FormData();
+      formData.append('audio', blob, `chunk-${index}.webm`);
 
-  const stopSpeechPreview = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* */ }
-      recognitionRef.current = null;
+      const response = await fetch('/api/voice/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = (data.text || '').trim();
+        transcribedChunksRef.current.set(index, text);
+      } else {
+        transcribedChunksRef.current.set(index, '');
+      }
+    } catch {
+      transcribedChunksRef.current.set(index, '');
     }
-    setInterimText('');
-  }, []);
 
-  // -----------------------------------------------------------------------
-  // MediaRecorder (reliable audio capture for Whisper)
-  // -----------------------------------------------------------------------
+    setActiveTranscriptions(prev => Math.max(0, prev - 1));
+    rebuildText();
+  }, [rebuildText]);
 
-  const startMediaRecorder = useCallback(async (): Promise<boolean> => {
+  /** Start recording */
+  const startRecording = useCallback(async () => {
+    setError(null);
+    setCurrentText('');
+    textRef.current = '';
+    chunkIndexRef.current = 0;
+    nextExpectedRef.current = 0;
+    transcribedChunksRef.current.clear();
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
-      audioChunksRef.current = [];
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -190,156 +134,97 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && isRecordingRef.current) {
+          const index = chunkIndexRef.current++;
+          // Fire and forget — transcription happens in parallel
+          transcribeChunk(event.data, index);
+        }
       };
 
-      // Collect data every 1 second (for fast save)
-      recorder.start(1000);
-      return true;
+      recorder.onerror = () => {
+        setError('Error en la grabación. Intenta nuevamente.');
+      };
+
+      // Capture chunks every 3 seconds for near-real-time transcription
+      recorder.start(3000);
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      startTimeRef.current = Date.now();
+      setDuration(0);
+
+      timerRef.current = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }, 1000);
     } catch (err) {
       if (err instanceof Error && err.name === 'NotAllowedError') {
         setError('Permiso de micrófono denegado. Habilita el micrófono en configuración del navegador.');
       } else {
         setError('No se pudo acceder al micrófono.');
       }
-      return false;
     }
-  }, []);
+  }, [transcribeChunk]);
 
-  const stopMediaRecorder = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  }, []);
-
-  // -----------------------------------------------------------------------
-  // Public actions
-  // -----------------------------------------------------------------------
-
-  const startRecording = useCallback(async () => {
-    setError(null);
-    setPreviewText('');
-    setInterimText('');
-    previewTextRef.current = '';
-    audioChunksRef.current = [];
-
-    // Start MediaRecorder first (critical)
-    const ok = await startMediaRecorder();
-    if (!ok) return;
-
-    isRecordingRef.current = true;
-    setIsRecording(true);
-    startTimeRef.current = Date.now();
-    setDuration(0);
-
-    timerRef.current = setInterval(() => {
-      setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 1000);
-
-    // Start speech preview (non-critical, best effort)
-    startSpeechPreview();
-  }, [startMediaRecorder, startSpeechPreview]);
-
+  /** Stop and save */
   const pauseAndSave = useCallback(async () => {
     isRecordingRef.current = false;
     setIsRecording(false);
-    stopSpeechPreview();
 
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-
-    // Stop MediaRecorder and collect final data
-    setSaving(true);
-    setSavingStep('Deteniendo grabación...');
-
-    // Request final data
+    // Stop recorder — triggers final ondataavailable
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.requestData();
-      // Give it a moment to flush
-      await new Promise(resolve => setTimeout(resolve, 500));
       mediaRecorderRef.current.stop();
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
 
-    // Wait for ondataavailable to fire
-    await new Promise(resolve => setTimeout(resolve, 300));
+    setSaving(true);
+
+    // Wait for all pending transcriptions to finish (max 10 seconds)
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      // Check if all chunks have been transcribed
+      const totalChunks = chunkIndexRef.current;
+      const transcribed = transcribedChunksRef.current.size;
+      if (transcribed >= totalChunks) break;
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    // Final rebuild
+    rebuildText();
 
     const segDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    const text = textRef.current.trim();
 
-    // Build complete audio blob
-    if (audioChunksRef.current.length > 0) {
-      setSavingStep('Transcribiendo audio con Whisper IA...');
-      const fullBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-      // Send to Whisper for high-quality transcription
-      try {
-        const formData = new FormData();
-        formData.append('audio', fullBlob, 'recording.webm');
-
-        const response = await fetch('/api/voice/transcribe', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.text && data.text.trim()) {
-            const whisperText = data.text.trim();
-            setSavingStep('Guardando en base de datos...');
-            await onSave(whisperText, segDuration);
-            setSavedSegments(prev => [...prev, whisperText]);
-            setPreviewText(whisperText); // Show final Whisper result
-            setSaving(false);
-            setSavingStep('');
-            return;
-          }
-        }
-      } catch {
-        // Whisper failed — fall back to preview text
-      }
-
-      // Fallback: use the Web Speech preview text if Whisper failed
-      const fallbackText = previewTextRef.current.trim();
-      if (fallbackText) {
-        setSavingStep('Guardando en base de datos...');
-        await onSave(fallbackText, segDuration);
-        setSavedSegments(prev => [...prev, fallbackText]);
-      }
-    } else {
-      // No audio chunks — use preview text
-      const fallbackText = previewTextRef.current.trim();
-      if (fallbackText) {
-        setSavingStep('Guardando en base de datos...');
-        await onSave(fallbackText, segDuration);
-        setSavedSegments(prev => [...prev, fallbackText]);
-      }
+    if (text) {
+      await onSave(text, segDuration);
+      setSavedSegments(prev => [...prev, text]);
     }
 
     setSaving(false);
-    setSavingStep('');
-  }, [onSave, stopSpeechPreview]);
+  }, [onSave, rebuildText]);
 
+  /** Cancel */
   const cancel = useCallback(() => {
     isRecordingRef.current = false;
     setIsRecording(false);
-    stopSpeechPreview();
-    stopMediaRecorder();
-    audioChunksRef.current = [];
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  }, [stopSpeechPreview, stopMediaRecorder]);
+  }, []);
 
   // Cleanup
   useEffect(() => {
     return () => {
       isRecordingRef.current = false;
-      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { /* */ } }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') { mediaRecorderRef.current.stop(); }
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
       if (timerRef.current) { clearInterval(timerRef.current); }
@@ -366,7 +251,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
           )}
           <span className="text-sm font-semibold text-gray-800">
             {saving
-              ? 'Procesando...'
+              ? 'Guardando...'
               : isRecording
                 ? 'Grabando...'
                 : 'Agente IA de Voz'
@@ -374,6 +259,13 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
           </span>
           {isRecording && (
             <span className="text-xs font-mono bg-white px-2 py-0.5 rounded border">{formatDuration(duration)}</span>
+          )}
+          {/* Transcription activity indicator */}
+          {activeTranscriptions > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+              <svg className="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Transcribiendo
+            </span>
           )}
         </div>
 
@@ -412,22 +304,22 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       {/* Error */}
       {error && <div className="rounded bg-red-50 border border-red-200 p-2"><p className="text-xs text-red-700">{error}</p></div>}
 
-      {/* Saving progress */}
-      {saving && savingStep && (
+      {/* Saving indicator */}
+      {saving && (
         <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 rounded p-2 border border-blue-200">
           <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          {savingStep}
+          Procesando fragmentos pendientes y guardando...
         </div>
       )}
 
-      {/* Live preview transcription */}
-      {(isRecording || previewText) && (
+      {/* Live transcription */}
+      {(isRecording || currentText || saving) && (
         <div className="rounded bg-white border border-gray-200 p-3 min-h-[60px] max-h-[150px] overflow-y-auto">
           <p className="text-sm text-gray-800 whitespace-pre-wrap">
-            {previewText}
-            {interimText && <span className="text-gray-400 italic"> {interimText}</span>}
-            {!previewText && !interimText && isRecording && (
-              <span className="text-gray-400 italic">Escuchando... habla cerca del micrófono</span>
+            {currentText || (
+              <span className="text-gray-400 italic">
+                {isRecording ? 'Escuchando... el texto aparecerá en segundos' : ''}
+              </span>
             )}
           </p>
         </div>
@@ -441,7 +333,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ La vista previa aparece en tiempo real. Al guardar, el audio completo se transcribe con Whisper IA para máxima calidad y precisión.</p>
+      <p className="text-[10px] text-gray-500">🎙️ Transcripción en línea con Whisper IA. El texto aparece progresivamente mientras hablas. Nunca se congela.</p>
     </div>
   );
 }
