@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
+  resultIndex: number;
 }
 interface SpeechRecognitionResultList {
   length: number;
@@ -55,6 +56,18 @@ interface VoiceRecorderProps {
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * VoiceRecorder - Continuous voice transcription using Web Speech API.
+ *
+ * Strategy: Use `continuous: true` mode to keep the microphone open.
+ * Chrome will eventually fire `onend` after ~60s of silence or due to
+ * internal timeouts. When that happens, we immediately create a NEW
+ * SpeechRecognition instance and start it — this gives fluid, uninterrupted
+ * transcription without the "stuck" behavior of non-continuous mode.
+ *
+ * The `resultIndex` property is used to only process NEW results on each
+ * event, avoiding duplicate text accumulation.
+ */
 export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [currentText, setCurrentText] = useState('');
@@ -70,11 +83,9 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const textRef = useRef('');
   const isRecordingRef = useRef(false);
-  const lastResultTimeRef = useRef<number>(0);
-  const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const restartCountRef = useRef(0);
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep ref in sync with state
+  // Keep refs in sync
   useEffect(() => { textRef.current = currentText; }, [currentText]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
 
@@ -86,134 +97,99 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   }, []);
 
   /**
-   * Creates a FRESH SpeechRecognition instance.
-   * Key insight: Chrome's Web Speech API can get stuck when reusing instances.
-   * Creating a new instance on every restart ensures clean state.
+   * Creates and starts a new SpeechRecognition instance in CONTINUOUS mode.
+   * Each instance maintains its own result index tracking.
    */
-  const createRecognition = useCallback((): ISpeechRecognition | null => {
+  const startNewRecognitionInstance = useCallback(() => {
+    if (!isRecordingRef.current) return;
+
     const SR = getSpeechRecognition();
-    if (!SR) return null;
+    if (!SR) return;
+
+    // Kill any existing instance first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
 
     const recognition = new SR();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'es-419'; // Latin American Spanish
+    recognition.lang = 'es-419';
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
       setStatus('listening');
-      lastResultTimeRef.current = Date.now();
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      lastResultTimeRef.current = Date.now();
+      if (!isRecordingRef.current) return;
+
       let interim = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) {
-          const t = r[0].transcript.trim();
-          if (t) {
-            textRef.current = textRef.current ? textRef.current + '. ' + t : t;
+      // Process only from resultIndex onwards to avoid reprocessing
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          const transcript = result[0].transcript.trim();
+          if (transcript) {
+            textRef.current = textRef.current
+              ? textRef.current + '. ' + transcript
+              : transcript;
             setCurrentText(textRef.current);
           }
         } else {
-          interim = r[0].transcript;
+          interim += result[0].transcript;
         }
       }
       setInterimText(interim);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // These errors are normal — recognition ended due to silence or network hiccup
+      // no-speech, aborted, network are normal lifecycle events
       if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
         return;
       }
       if (event.error === 'not-allowed') {
         setError('Permiso de micrófono denegado. Habilita el micrófono en la configuración del navegador.');
+        isRecordingRef.current = false;
+        setIsRecording(false);
+        setStatus('idle');
         return;
       }
-      setError(`Error: ${event.error}. Intenta guardar y grabar de nuevo.`);
+      // For other errors, don't stop — just log and let onend handle restart
+      console.warn('[VoiceRecorder] Error:', event.error);
     };
 
     recognition.onend = () => {
+      // Chrome fires onend when:
+      // 1. Long silence timeout (~60s)
+      // 2. Network interruption
+      // 3. Internal service reset
+      // Solution: immediately restart with a fresh instance
       setInterimText('');
-      // Auto-restart with a NEW instance if still recording
       if (isRecordingRef.current) {
         setStatus('restarting');
-        // Small delay to let browser release resources, then create fresh instance
-        setTimeout(() => {
+        // Brief delay to avoid hammering the API
+        restartTimeoutRef.current = setTimeout(() => {
           if (isRecordingRef.current) {
-            restartWithNewInstance();
+            startNewRecognitionInstance();
           }
-        }, 150);
+        }, 300);
       }
     };
 
-    return recognition;
-  }, [getSpeechRecognition]);
-
-  /**
-   * Restarts recognition with a completely new instance.
-   * This avoids Chrome's internal state issues with reused instances.
-   */
-  const restartWithNewInstance = useCallback(() => {
-    if (!isRecordingRef.current) return;
-
-    // Destroy old instance
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
-    }
-
-    // Create fresh instance
-    const newRecognition = createRecognition();
-    if (newRecognition) {
-      try {
-        newRecognition.start();
-        recognitionRef.current = newRecognition;
-        restartCountRef.current++;
-      } catch {
-        // If start fails, try again after a longer delay
-        setTimeout(() => {
-          if (isRecordingRef.current) {
-            restartWithNewInstance();
-          }
-        }, 500);
-      }
-    }
-  }, [createRecognition]);
-
-  /**
-   * WATCHDOG: Checks every 3 seconds if recognition is still alive.
-   * If no results received in 5 seconds, force-restart with a new instance.
-   * This prevents the "stuck" state where recognition silently stops working.
-   */
-  const startWatchdog = useCallback(() => {
-    if (watchdogRef.current) clearInterval(watchdogRef.current);
-
-    watchdogRef.current = setInterval(() => {
-      if (!isRecordingRef.current) return;
-
-      const now = Date.now();
-      const silenceDuration = now - lastResultTimeRef.current;
-
-      // If more than 5 seconds without any result (not even interim), force restart
-      if (silenceDuration > 5000) {
-        setStatus('restarting');
-        // Kill current instance
-        if (recognitionRef.current) {
-          try { recognitionRef.current.abort(); } catch { /* ignore */ }
-          recognitionRef.current = null;
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch {
+      // If start fails, retry after a delay
+      restartTimeoutRef.current = setTimeout(() => {
+        if (isRecordingRef.current) {
+          startNewRecognitionInstance();
         }
-        // Create fresh instance after brief pause
-        setTimeout(() => {
-          if (isRecordingRef.current) {
-            restartWithNewInstance();
-          }
-        }, 200);
-      }
-    }, 3000);
-  }, [restartWithNewInstance]);
+      }, 1000);
+    }
+  }, [getSpeechRecognition]);
 
   /** Start recording */
   const startRecording = useCallback(() => {
@@ -226,40 +202,20 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     setCurrentText('');
     setInterimText('');
     textRef.current = '';
-    restartCountRef.current = 0;
     isRecordingRef.current = true;
     setIsRecording(true);
     setStatus('listening');
+    startTimeRef.current = Date.now();
+    setDuration(0);
 
-    // Create first recognition instance
-    const recognition = createRecognition();
-    if (!recognition) {
-      setError('No se pudo crear el reconocimiento de voz.');
-      setIsRecording(false);
-      isRecordingRef.current = false;
-      return;
-    }
+    // Duration timer
+    timerRef.current = setInterval(() => {
+      setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
 
-    try {
-      recognition.start();
-      recognitionRef.current = recognition;
-      startTimeRef.current = Date.now();
-      lastResultTimeRef.current = Date.now();
-      setDuration(0);
-
-      // Duration timer
-      timerRef.current = setInterval(() => {
-        setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }, 1000);
-
-      // Start watchdog
-      startWatchdog();
-    } catch {
-      setError('No se pudo iniciar. Verifica permisos del micrófono.');
-      setIsRecording(false);
-      isRecordingRef.current = false;
-    }
-  }, [getSpeechRecognition, createRecognition, startWatchdog]);
+    // Start first recognition instance
+    startNewRecognitionInstance();
+  }, [getSpeechRecognition, startNewRecognitionInstance]);
 
   /** Pause and save current segment to DB */
   const pauseAndSave = useCallback(async () => {
@@ -268,12 +224,12 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     setIsRecording(false);
     setStatus('idle');
 
+    if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); restartTimeoutRef.current = null; }
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null; }
 
     const segDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const text = textRef.current.trim();
@@ -293,12 +249,12 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     setIsRecording(false);
     setStatus('idle');
 
+    if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); restartTimeoutRef.current = null; }
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null; }
     setInterimText('');
   }, []);
 
@@ -306,9 +262,9 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   useEffect(() => {
     return () => {
       isRecordingRef.current = false;
+      if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); }
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { /* */ } recognitionRef.current = null; }
       if (timerRef.current) { clearInterval(timerRef.current); }
-      if (watchdogRef.current) { clearInterval(watchdogRef.current); }
     };
   }, []);
 
@@ -353,7 +309,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
               <span className={`w-1.5 h-1.5 rounded-full ${
                 status === 'listening' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500 animate-bounce'
               }`}></span>
-              {status === 'listening' ? 'Activo' : 'Reiniciando'}
+              {status === 'listening' ? 'Activo' : 'Reconectando'}
             </span>
           )}
         </div>
@@ -422,7 +378,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. El reconocimiento se reinicia automáticamente si detecta silencio. Para reuniones largas, adjunta la grabación de audio/video directamente.</p>
+      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. El reconocimiento se reconecta automáticamente. Para reuniones largas, adjunta la grabación de audio/video directamente.</p>
     </div>
   );
 }
