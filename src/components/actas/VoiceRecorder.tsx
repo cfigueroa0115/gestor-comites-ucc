@@ -3,45 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ---------------------------------------------------------------------------
-// Types - Web Speech API
-// ---------------------------------------------------------------------------
-
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-interface SpeechRecognitionResultList {
-  length: number;
-  [index: number]: SpeechRecognitionResult;
-}
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  [index: number]: SpeechRecognitionAlternative;
-}
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-interface ISpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -57,179 +18,179 @@ interface VoiceRecorderProps {
 // ---------------------------------------------------------------------------
 
 /**
- * VoiceRecorder - Continuous voice transcription using Web Speech API.
+ * VoiceRecorder - Real-time voice transcription using MediaRecorder + Groq Whisper.
  *
- * Strategy: Use `continuous: true` mode to keep the microphone open.
- * Chrome will eventually fire `onend` after ~60s of silence or due to
- * internal timeouts. When that happens, we immediately create a NEW
- * SpeechRecognition instance and start it — this gives fluid, uninterrupted
- * transcription without the "stuck" behavior of non-continuous mode.
+ * Strategy: Instead of the unreliable Web Speech API (which stalls in Chrome),
+ * we use MediaRecorder to capture actual audio from the microphone in chunks
+ * every 5 seconds, then send each chunk to Groq Whisper for transcription.
  *
- * The `resultIndex` property is used to only process NEW results on each
- * event, avoiding duplicate text accumulation.
+ * Benefits:
+ * - Never stalls or freezes (MediaRecorder is rock-solid across browsers)
+ * - Much higher transcription quality (Whisper >> Web Speech API)
+ * - Works identically on desktop, tablet, and mobile
+ * - No duplicate text issues
  */
 export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [currentText, setCurrentText] = useState('');
-  const [interimText, setInterimText] = useState('');
+  const [processingChunk, setProcessingChunk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [savedSegments, setSavedSegments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'listening' | 'restarting'>('idle');
+  const [chunksProcessed, setChunksProcessed] = useState(0);
 
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const textRef = useRef('');
   const isRecordingRef = useRef(false);
-  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chunksQueueRef = useRef<Blob[]>([]);
+  const processingRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => { textRef.current = currentText; }, [currentText]);
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
 
-  const getSpeechRecognition = useCallback((): (new () => ISpeechRecognition) | null => {
-    if (typeof window === 'undefined') return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    return SR ?? null;
+  /**
+   * Sends an audio chunk to the server for Whisper transcription.
+   */
+  const transcribeChunk = useCallback(async (audioBlob: Blob) => {
+    if (audioBlob.size < 1000) return; // Skip tiny/silent chunks
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'chunk.webm');
+
+      const response = await fetch('/api/voice/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.text && data.text.trim()) {
+          const newText = data.text.trim();
+          textRef.current = textRef.current
+            ? textRef.current + ' ' + newText
+            : newText;
+          setCurrentText(textRef.current);
+          setChunksProcessed(prev => prev + 1);
+        }
+      }
+    } catch {
+      // Network error — skip this chunk silently
+    }
   }, []);
 
   /**
-   * Creates and starts a new SpeechRecognition instance in CONTINUOUS mode.
-   * Each instance maintains its own result index tracking.
+   * Process chunks from the queue one at a time.
    */
-  const startNewRecognitionInstance = useCallback(() => {
-    if (!isRecordingRef.current) return;
+  const processQueue = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
 
-    const SR = getSpeechRecognition();
-    if (!SR) return;
-
-    // Kill any existing instance first
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
+    while (chunksQueueRef.current.length > 0) {
+      const chunk = chunksQueueRef.current.shift();
+      if (chunk) {
+        setProcessingChunk(true);
+        await transcribeChunk(chunk);
+        setProcessingChunk(false);
+      }
     }
 
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'es-419';
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setStatus('listening');
-    };
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      if (!isRecordingRef.current) return;
-
-      let interim = '';
-      // Process only from resultIndex onwards to avoid reprocessing
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          const transcript = result[0].transcript.trim();
-          if (transcript) {
-            textRef.current = textRef.current
-              ? textRef.current + '. ' + transcript
-              : transcript;
-            setCurrentText(textRef.current);
-          }
-        } else {
-          interim += result[0].transcript;
-        }
-      }
-      setInterimText(interim);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // no-speech, aborted, network are normal lifecycle events
-      if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
-        return;
-      }
-      if (event.error === 'not-allowed') {
-        setError('Permiso de micrófono denegado. Habilita el micrófono en la configuración del navegador.');
-        isRecordingRef.current = false;
-        setIsRecording(false);
-        setStatus('idle');
-        return;
-      }
-      // For other errors, don't stop — just log and let onend handle restart
-      console.warn('[VoiceRecorder] Error:', event.error);
-    };
-
-    recognition.onend = () => {
-      // Chrome fires onend when:
-      // 1. Long silence timeout (~60s)
-      // 2. Network interruption
-      // 3. Internal service reset
-      // Solution: immediately restart with a fresh instance
-      setInterimText('');
-      if (isRecordingRef.current) {
-        setStatus('restarting');
-        // Brief delay to avoid hammering the API
-        restartTimeoutRef.current = setTimeout(() => {
-          if (isRecordingRef.current) {
-            startNewRecognitionInstance();
-          }
-        }, 300);
-      }
-    };
-
-    try {
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch {
-      // If start fails, retry after a delay
-      restartTimeoutRef.current = setTimeout(() => {
-        if (isRecordingRef.current) {
-          startNewRecognitionInstance();
-        }
-      }, 1000);
-    }
-  }, [getSpeechRecognition]);
+    processingRef.current = false;
+  }, [transcribeChunk]);
 
   /** Start recording */
-  const startRecording = useCallback(() => {
-    const SR = getSpeechRecognition();
-    if (!SR) {
-      setError('Navegador no soportado. Usa Chrome o Edge.');
-      return;
-    }
+  const startRecording = useCallback(async () => {
     setError(null);
     setCurrentText('');
-    setInterimText('');
     textRef.current = '';
-    isRecordingRef.current = true;
-    setIsRecording(true);
-    setStatus('listening');
-    startTimeRef.current = Date.now();
-    setDuration(0);
+    setChunksProcessed(0);
+    chunksQueueRef.current = [];
 
-    // Duration timer
-    timerRef.current = setInterval(() => {
-      setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 1000);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        },
+      });
+      streamRef.current = stream;
 
-    // Start first recognition instance
-    startNewRecognitionInstance();
-  }, [getSpeechRecognition, startNewRecognitionInstance]);
+      // Determine supported MIME type
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/ogg;codecs=opus';
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksQueueRef.current.push(event.data);
+          processQueue();
+        }
+      };
+
+      mediaRecorder.onerror = () => {
+        setError('Error en la grabación. Intenta nuevamente.');
+      };
+
+      // Start recording with 5-second chunks
+      mediaRecorder.start(5000);
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      startTimeRef.current = Date.now();
+      setDuration(0);
+
+      // Duration timer
+      timerRef.current = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }, 1000);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        setError('Permiso de micrófono denegado. Habilita el micrófono en la configuración del navegador.');
+      } else {
+        setError('No se pudo acceder al micrófono. Verifica permisos.');
+      }
+    }
+  }, [processQueue]);
+
+  /** Stop recording and wait for final chunks */
+  const stopRecording = useCallback(() => {
+    isRecordingRef.current = false;
+    setIsRecording(false);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   /** Pause and save current segment to DB */
   const pauseAndSave = useCallback(async () => {
-    // Stop everything
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setStatus('idle');
+    stopRecording();
 
-    if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); restartTimeoutRef.current = null; }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
+    // Wait a moment for final chunk to process
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Process any remaining chunks
+    while (chunksQueueRef.current.length > 0 || processingRef.current) {
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
 
     const segDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const text = textRef.current.trim();
@@ -240,30 +201,24 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       setSavedSegments(prev => [...prev, text]);
       setSaving(false);
     }
-    setInterimText('');
-  }, [onSave]);
+  }, [onSave, stopRecording]);
 
   /** Cancel without saving */
   const cancel = useCallback(() => {
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    setStatus('idle');
-
-    if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); restartTimeoutRef.current = null; }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
-      recognitionRef.current = null;
-    }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setInterimText('');
-  }, []);
+    stopRecording();
+    chunksQueueRef.current = [];
+  }, [stopRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       isRecordingRef.current = false;
-      if (restartTimeoutRef.current) { clearTimeout(restartTimeoutRef.current); }
-      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { /* */ } recognitionRef.current = null; }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
       if (timerRef.current) { clearInterval(timerRef.current); }
     };
   }, []);
@@ -288,9 +243,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
           )}
           <span className="text-sm font-semibold text-gray-800">
             {isRecording
-              ? status === 'restarting'
-                ? 'Reconectando...'
-                : 'Escuchando...'
+              ? 'Grabando...'
               : saving
                 ? 'Guardando...'
                 : 'Agente IA de Voz'
@@ -299,17 +252,11 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
           {isRecording && (
             <span className="text-xs font-mono bg-white px-2 py-0.5 rounded border">{formatDuration(duration)}</span>
           )}
-          {/* Status indicator */}
-          {isRecording && (
-            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-              status === 'listening'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                status === 'listening' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500 animate-bounce'
-              }`}></span>
-              {status === 'listening' ? 'Activo' : 'Reconectando'}
+          {/* Processing indicator */}
+          {processingChunk && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+              <svg className="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Transcribiendo
             </span>
           )}
         </div>
@@ -359,14 +306,21 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
 
       {/* Live transcription */}
       {(isRecording || currentText) && (
-        <div className="rounded bg-white border border-gray-200 p-3 min-h-[60px] max-h-[120px] overflow-y-auto">
+        <div className="rounded bg-white border border-gray-200 p-3 min-h-[60px] max-h-[150px] overflow-y-auto">
           <p className="text-sm text-gray-800 whitespace-pre-wrap">
-            {currentText}
-            {interimText && <span className="text-gray-400 italic"> {interimText}</span>}
-            {!currentText && !interimText && isRecording && (
-              <span className="text-gray-400 italic">Esperando voz...</span>
+            {currentText || (
+              <span className="text-gray-400 italic">
+                {isRecording ? 'Grabando audio... el texto aparecerá cada 5 segundos' : ''}
+              </span>
             )}
           </p>
+        </div>
+      )}
+
+      {/* Progress info */}
+      {isRecording && chunksProcessed > 0 && (
+        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+          <span>📝 {chunksProcessed} fragmento(s) transcrito(s) con Whisper IA</span>
         </div>
       )}
 
@@ -378,7 +332,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. El reconocimiento se reconecta automáticamente. Para reuniones largas, adjunta la grabación de audio/video directamente.</p>
+      <p className="text-[10px] text-gray-500">🎙️ El audio se transcribe con Whisper IA cada 5 segundos. Habla con naturalidad — la transcripción es de alta calidad y nunca se congela.</p>
     </div>
   );
 }
