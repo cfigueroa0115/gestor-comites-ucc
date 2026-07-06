@@ -91,14 +91,19 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     textRef.current = '';
 
     const recognition = new SR();
-    recognition.continuous = false;
+    // Use continuous on desktop, non-continuous on mobile for stability
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    recognition.continuous = !isMobile;
     recognition.interimResults = true;
-    recognition.lang = 'es-CO';
+    recognition.lang = 'es';  // Generic Spanish for better recognition
     recognition.maxAlternatives = 1;
+
+    let processedIndex = 0;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
-      for (let i = 0; i < event.results.length; i++) {
+      // Only process new results (for continuous mode)
+      for (let i = processedIndex; i < event.results.length; i++) {
         const r = event.results[i];
         if (r.isFinal) {
           const t = r[0].transcript.trim();
@@ -106,6 +111,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
             textRef.current = textRef.current ? textRef.current + '. ' + t : t;
             setCurrentText(textRef.current);
           }
+          processedIndex = i + 1;
         } else {
           interim = r[0].transcript;
         }
@@ -269,7 +275,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ Puedes grabar por partes: graba → guarda → graba más. Todo se acumula para el acta.</p>
+      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. Para mejor calidad en reuniones largas, adjunta la grabación de audio/video directamente.</p>
     </div>
   );
 }
