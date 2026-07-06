@@ -91,19 +91,16 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     textRef.current = '';
 
     const recognition = new SR();
-    // Use continuous on desktop, non-continuous on mobile for stability
-    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    recognition.continuous = !isMobile;
+    // Always non-continuous: captures one phrase, then auto-restarts.
+    // This keeps the flow fluid and prevents freezing during pauses.
+    recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = 'es-419';  // Latin American Spanish - prevents English fallback
+    recognition.lang = 'es-419';  // Latin American Spanish
     recognition.maxAlternatives = 1;
-
-    let processedIndex = 0;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
-      // Only process new results (for continuous mode)
-      for (let i = processedIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const r = event.results[i];
         if (r.isFinal) {
           const t = r[0].transcript.trim();
@@ -111,7 +108,6 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
             textRef.current = textRef.current ? textRef.current + '. ' + t : t;
             setCurrentText(textRef.current);
           }
-          processedIndex = i + 1;
         } else {
           interim = r[0].transcript;
         }
@@ -120,17 +116,16 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        return; // Normal, ignore
-      }
-      if (event.error === 'network') {
-        // Network error - auto retry silently, don't show error to user
-        return;
+      if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
+        return; // Normal or network hiccup, ignore silently
       }
       setError(`Error: ${event.error}. Intenta guardar y grabar de nuevo.`);
     };
 
     recognition.onend = () => {
+      // Clear interim text between recognition sessions
+      setInterimText('');
+      // Auto-restart if still recording
       if (recognitionRef.current === recognition) {
         try { recognition.start(); } catch { /* stopped */ }
       }
