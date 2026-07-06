@@ -601,7 +601,7 @@ function ActaFormModalInner({
                 type="button"
                 onClick={() => setShowVoiceConfirm(true)}
                 disabled={isPending || isVoiceRecording}
-                className="ai-button-glow inline-flex items-center justify-center w-12 h-12 rounded-full bg-linear-to-br from-blue-500 via-purple-500 to-violet-600 text-white shadow-lg hover:scale-105 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
+                className="ai-button-glow inline-flex items-center justify-center w-12 h-12 rounded-full bg-linear-to-br from-ucc-green via-emerald-500 to-teal-500 text-white shadow-lg hover:scale-110 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
                 aria-label="Grabar sesión con IA"
               >
                 {/* Microphone + AI brain SVG icon */}
