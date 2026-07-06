@@ -472,36 +472,26 @@ function ActaFormModalInner({
             <AttachmentManager onUploadStatusChange={setUploadInProgress} onFilesReady={setAttachedFiles} />
           </div>
 
-          {/* Voice Recorder (shown inline when recording) */}
+          {/* Voice Recorder (shown inline when active) */}
           {isVoiceRecording && (
             <div className="space-y-1">
               <VoiceRecorder
-                onRecordingComplete={async (text, durationSecs) => {
-                  setIsVoiceRecording(false);
+                onSave={async (text, durationSecs) => {
                   if (text.trim() && voiceSessionId) {
                     await saveTranscriptionAction(voiceSessionId, text, durationSecs);
-                    const preview = text.length > 300
-                      ? text.slice(0, 300) + `... [${text.length} caracteres totales guardados]`
-                      : text;
-                    setVoiceTranscriptPreview(preview);
                   }
                 }}
-                onCancel={() => {
+                onFinish={() => {
                   setIsVoiceRecording(false);
-                }}
-                onPartialSave={async (text) => {
-                  // Auto-save every 30 seconds during long recordings
-                  if (text.trim() && voiceSessionId) {
-                    await saveTranscriptionAction(voiceSessionId, text, 0);
-                  }
+                  setVoiceTranscriptPreview('Grabación(es) guardada(s) en base de datos ✅');
                 }}
               />
             </div>
           )}
 
-          {/* Voice transcription preview */}
+          {/* Voice transcription saved indicator */}
           {voiceTranscriptPreview && !isVoiceRecording && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-2">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-green-700">✅ Transcripción de voz guardada en base de datos</span>
                 <button
@@ -515,10 +505,7 @@ function ActaFormModalInner({
                   Eliminar
                 </button>
               </div>
-              <div className="text-xs text-gray-600 italic max-h-24 overflow-y-auto bg-white rounded p-2 border border-green-100">
-                &ldquo;{voiceTranscriptPreview}&rdquo;
-              </div>
-              <p className="text-[10px] text-green-600">Este texto se enviará al agente IA junto con los documentos adjuntos para generar el acta.</p>
+              <p className="text-[10px] text-green-600">Los textos grabados se enviarán al agente IA junto con los documentos adjuntos para generar el acta.</p>
             </div>
           )}
 
