@@ -34,6 +34,7 @@ interface ISpeechRecognition extends EventTarget {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   start(): void;
   stop(): void;
   abort(): void;
@@ -62,14 +63,20 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [duration, setDuration] = useState(0);
   const [savedSegments, setSavedSegments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'listening' | 'restarting'>('idle');
 
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const textRef = useRef('');
+  const isRecordingRef = useRef(false);
+  const lastResultTimeRef = useRef<number>(0);
+  const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restartCountRef = useRef(0);
 
-  // Sync ref
+  // Keep ref in sync with state
   useEffect(() => { textRef.current = currentText; }, [currentText]);
+  useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
 
   const getSpeechRecognition = useCallback((): (new () => ISpeechRecognition) | null => {
     if (typeof window === 'undefined') return null;
@@ -78,27 +85,28 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     return SR ?? null;
   }, []);
 
-  /** Start or resume recording */
-  const startRecording = useCallback(() => {
+  /**
+   * Creates a FRESH SpeechRecognition instance.
+   * Key insight: Chrome's Web Speech API can get stuck when reusing instances.
+   * Creating a new instance on every restart ensures clean state.
+   */
+  const createRecognition = useCallback((): ISpeechRecognition | null => {
     const SR = getSpeechRecognition();
-    if (!SR) {
-      setError('Navegador no soportado. Usa Chrome o Edge.');
-      return;
-    }
-    setError(null);
-    setCurrentText('');
-    setInterimText('');
-    textRef.current = '';
+    if (!SR) return null;
 
     const recognition = new SR();
-    // Always non-continuous: captures one phrase, then auto-restarts.
-    // This keeps the flow fluid and prevents freezing during pauses.
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = 'es-419';  // Latin American Spanish
+    recognition.lang = 'es-419'; // Latin American Spanish
     recognition.maxAlternatives = 1;
 
+    recognition.onstart = () => {
+      setStatus('listening');
+      lastResultTimeRef.current = Date.now();
+    };
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      lastResultTimeRef.current = Date.now();
       let interim = '';
       for (let i = 0; i < event.results.length; i++) {
         const r = event.results[i];
@@ -116,46 +124,157 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // These errors are normal — recognition ended due to silence or network hiccup
       if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
-        return; // Normal or network hiccup, ignore silently
+        return;
+      }
+      if (event.error === 'not-allowed') {
+        setError('Permiso de micrófono denegado. Habilita el micrófono en la configuración del navegador.');
+        return;
       }
       setError(`Error: ${event.error}. Intenta guardar y grabar de nuevo.`);
     };
 
     recognition.onend = () => {
-      // Clear interim text between recognition sessions
       setInterimText('');
-      // Auto-restart if still recording
-      if (recognitionRef.current === recognition) {
-        try { recognition.start(); } catch { /* stopped */ }
+      // Auto-restart with a NEW instance if still recording
+      if (isRecordingRef.current) {
+        setStatus('restarting');
+        // Small delay to let browser release resources, then create fresh instance
+        setTimeout(() => {
+          if (isRecordingRef.current) {
+            restartWithNewInstance();
+          }
+        }, 150);
       }
     };
+
+    return recognition;
+  }, [getSpeechRecognition]);
+
+  /**
+   * Restarts recognition with a completely new instance.
+   * This avoids Chrome's internal state issues with reused instances.
+   */
+  const restartWithNewInstance = useCallback(() => {
+    if (!isRecordingRef.current) return;
+
+    // Destroy old instance
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+
+    // Create fresh instance
+    const newRecognition = createRecognition();
+    if (newRecognition) {
+      try {
+        newRecognition.start();
+        recognitionRef.current = newRecognition;
+        restartCountRef.current++;
+      } catch {
+        // If start fails, try again after a longer delay
+        setTimeout(() => {
+          if (isRecordingRef.current) {
+            restartWithNewInstance();
+          }
+        }, 500);
+      }
+    }
+  }, [createRecognition]);
+
+  /**
+   * WATCHDOG: Checks every 3 seconds if recognition is still alive.
+   * If no results received in 5 seconds, force-restart with a new instance.
+   * This prevents the "stuck" state where recognition silently stops working.
+   */
+  const startWatchdog = useCallback(() => {
+    if (watchdogRef.current) clearInterval(watchdogRef.current);
+
+    watchdogRef.current = setInterval(() => {
+      if (!isRecordingRef.current) return;
+
+      const now = Date.now();
+      const silenceDuration = now - lastResultTimeRef.current;
+
+      // If more than 5 seconds without any result (not even interim), force restart
+      if (silenceDuration > 5000) {
+        setStatus('restarting');
+        // Kill current instance
+        if (recognitionRef.current) {
+          try { recognitionRef.current.abort(); } catch { /* ignore */ }
+          recognitionRef.current = null;
+        }
+        // Create fresh instance after brief pause
+        setTimeout(() => {
+          if (isRecordingRef.current) {
+            restartWithNewInstance();
+          }
+        }, 200);
+      }
+    }, 3000);
+  }, [restartWithNewInstance]);
+
+  /** Start recording */
+  const startRecording = useCallback(() => {
+    const SR = getSpeechRecognition();
+    if (!SR) {
+      setError('Navegador no soportado. Usa Chrome o Edge.');
+      return;
+    }
+    setError(null);
+    setCurrentText('');
+    setInterimText('');
+    textRef.current = '';
+    restartCountRef.current = 0;
+    isRecordingRef.current = true;
+    setIsRecording(true);
+    setStatus('listening');
+
+    // Create first recognition instance
+    const recognition = createRecognition();
+    if (!recognition) {
+      setError('No se pudo crear el reconocimiento de voz.');
+      setIsRecording(false);
+      isRecordingRef.current = false;
+      return;
+    }
 
     try {
       recognition.start();
       recognitionRef.current = recognition;
-      setIsRecording(true);
       startTimeRef.current = Date.now();
+      lastResultTimeRef.current = Date.now();
       setDuration(0);
+
+      // Duration timer
       timerRef.current = setInterval(() => {
         setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
+
+      // Start watchdog
+      startWatchdog();
     } catch {
       setError('No se pudo iniciar. Verifica permisos del micrófono.');
+      setIsRecording(false);
+      isRecordingRef.current = false;
     }
-  }, [getSpeechRecognition]);
+  }, [getSpeechRecognition, createRecognition, startWatchdog]);
 
   /** Pause and save current segment to DB */
   const pauseAndSave = useCallback(async () => {
-    // Stop recognition
+    // Stop everything
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    setStatus('idle');
+
     if (recognitionRef.current) {
-      const ref = recognitionRef.current;
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
       recognitionRef.current = null;
-      ref.stop();
     }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null; }
 
-    setIsRecording(false);
     const segDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const text = textRef.current.trim();
 
@@ -165,23 +284,31 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       setSavedSegments(prev => [...prev, text]);
       setSaving(false);
     }
+    setInterimText('');
   }, [onSave]);
 
   /** Cancel without saving */
   const cancel = useCallback(() => {
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    setStatus('idle');
+
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setIsRecording(false);
+    if (watchdogRef.current) { clearInterval(watchdogRef.current); watchdogRef.current = null; }
+    setInterimText('');
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
+      isRecordingRef.current = false;
+      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { /* */ } recognitionRef.current = null; }
       if (timerRef.current) { clearInterval(timerRef.current); }
+      if (watchdogRef.current) { clearInterval(watchdogRef.current); }
     };
   }, []);
 
@@ -204,10 +331,30 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
             </div>
           )}
           <span className="text-sm font-semibold text-gray-800">
-            {isRecording ? 'Escuchando...' : saving ? 'Guardando...' : 'Agente IA de Voz'}
+            {isRecording
+              ? status === 'restarting'
+                ? 'Reconectando...'
+                : 'Escuchando...'
+              : saving
+                ? 'Guardando...'
+                : 'Agente IA de Voz'
+            }
           </span>
           {isRecording && (
             <span className="text-xs font-mono bg-white px-2 py-0.5 rounded border">{formatDuration(duration)}</span>
+          )}
+          {/* Status indicator */}
+          {isRecording && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+              status === 'listening'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                status === 'listening' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500 animate-bounce'
+              }`}></span>
+              {status === 'listening' ? 'Activo' : 'Reiniciando'}
+            </span>
           )}
         </div>
 
@@ -275,7 +422,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. Para mejor calidad en reuniones largas, adjunta la grabación de audio/video directamente.</p>
+      <p className="text-[10px] text-gray-500">🎙️ Habla claro y pausado cerca del micrófono. El reconocimiento se reinicia automáticamente si detecta silencio. Para reuniones largas, adjunta la grabación de audio/video directamente.</p>
     </div>
   );
 }
