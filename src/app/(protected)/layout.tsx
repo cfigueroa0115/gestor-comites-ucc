@@ -14,7 +14,7 @@ export default async function ProtectedLayout({
   return (
     <div className="min-h-screen flex flex-col bg-ucc-gray bg-digital-pattern bg-digital-dots">
       {/* Navigation Header */}
-      <header className="bg-gradient-to-r from-ucc-green to-ucc-green-dark text-white shadow-lg">
+      <header className="bg-linear-to-r from-ucc-green to-ucc-green-dark text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top bar */}
           <div className="flex items-center justify-between h-[72px]">
