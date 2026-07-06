@@ -12,22 +12,29 @@ interface VoiceRecorderProps {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Seconds per recording cycle. Each cycle produces one complete audio file. */
+const CYCLE_SECONDS = 6;
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 /**
- * VoiceRecorder - Real-time voice transcription with MediaRecorder + Whisper.
+ * VoiceRecorder - Voice transcription with MediaRecorder + Groq Whisper.
  *
- * ROOT CAUSE FIX: The previous approach used MediaRecorder's `timeslice` param
- * which produces incomplete chunks (only first has WebM header). Whisper can't
- * decode headerless chunks → that's why only 1 fragment transcribed.
+ * How it works:
+ * 1. Opens microphone stream (stays open the entire session)
+ * 2. Every CYCLE_SECONDS: stops MediaRecorder → produces COMPLETE webm file
+ * 3. Sends that file to /api/voice/transcribe (Groq Whisper)
+ * 4. Immediately starts a new MediaRecorder on the same stream
+ * 5. Text appears progressively as Whisper returns results
+ * 6. On "Guardar": waits for all pending, combines text, saves to DB
  *
- * NEW APPROACH: Stop/Start cycling.
- * - Every 4 seconds: stop the recorder → get a COMPLETE webm file → start new recorder
- * - Each complete file is sent to Whisper in parallel
- * - Text builds up progressively in chronological order
- * - The microphone stream stays open (only the recorder cycles)
- * - Result: text appears every ~5-6 seconds, fluently, without ever freezing
+ * Key: Each stop() produces a COMPLETE file with valid headers.
+ * This is essential because Whisper cannot decode partial webm fragments.
  */
 export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
@@ -36,11 +43,12 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   const [duration, setDuration] = useState(0);
   const [savedSegments, setSavedSegments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [activeTranscriptions, setActiveTranscriptions] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const cycleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -54,7 +62,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
 
   /**
-   * Rebuild full text from all transcribed chunks in order.
+   * Rebuild the full text from transcribed chunks in chronological order.
    */
   const rebuildText = useCallback(() => {
     const map = transcribedMapRef.current;
@@ -69,15 +77,15 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
   }, []);
 
   /**
-   * Send a complete audio blob to Whisper for transcription.
+   * Send a complete audio blob to the server for Whisper transcription.
    */
   const sendToWhisper = useCallback(async (blob: Blob, index: number) => {
-    if (blob.size < 2000) {
-      // Too small — likely silence
+    if (blob.size < 1500) {
+      // Too small — mark as silence
       transcribedMapRef.current.set(index, '');
-      rebuildText();
       pendingCountRef.current--;
-      setActiveTranscriptions(pendingCountRef.current);
+      setPendingCount(pendingCountRef.current);
+      rebuildText();
       return;
     }
 
@@ -90,75 +98,86 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         body: formData,
       });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        transcribedMapRef.current.set(index, (data.text || '').trim());
+      const data = await resp.json();
+
+      if (data.text) {
+        transcribedMapRef.current.set(index, data.text);
+        setLastError(null);
       } else {
         transcribedMapRef.current.set(index, '');
+        if (data.error && data.error !== 'TOO_SMALL') {
+          setLastError(`Error Whisper: ${data.error}`);
+        }
       }
     } catch {
       transcribedMapRef.current.set(index, '');
+      setLastError('Error de red al transcribir');
     }
 
     pendingCountRef.current--;
-    setActiveTranscriptions(Math.max(0, pendingCountRef.current));
+    setPendingCount(Math.max(0, pendingCountRef.current));
+    setCompletedCount(prev => prev + 1);
     rebuildText();
   }, [rebuildText]);
 
   /**
-   * Creates a new MediaRecorder on the existing stream and starts it.
-   * Returns the recorder instance.
+   * Create a new MediaRecorder and start it on the existing stream.
+   * When it stops, it sends the complete audio to Whisper.
    */
   const createAndStartRecorder = useCallback((): MediaRecorder | null => {
     const stream = streamRef.current;
-    if (!stream) return null;
+    if (!stream || !stream.active) return null;
 
-    const recorder = new MediaRecorder(stream, { mimeType: mimeTypeRef.current });
-    const localChunks: Blob[] = [];
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType: mimeTypeRef.current });
+      const localChunks: Blob[] = [];
 
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) localChunks.push(e.data);
-    };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) localChunks.push(e.data);
+      };
 
-    recorder.onstop = () => {
-      if (localChunks.length > 0) {
-        const completeBlob = new Blob(localChunks, { type: mimeTypeRef.current });
-        const idx = chunkIndexRef.current++;
-        pendingCountRef.current++;
-        setActiveTranscriptions(pendingCountRef.current);
-        // Send to Whisper in background (don't await)
-        sendToWhisper(completeBlob, idx);
-      }
-    };
+      recorder.onstop = () => {
+        if (localChunks.length > 0) {
+          const completeBlob = new Blob(localChunks, { type: mimeTypeRef.current });
+          const idx = chunkIndexRef.current++;
+          pendingCountRef.current++;
+          setPendingCount(pendingCountRef.current);
+          sendToWhisper(completeBlob, idx);
+        }
+      };
 
-    recorder.start();
-    return recorder;
+      recorder.start();
+      return recorder;
+    } catch {
+      return null;
+    }
   }, [sendToWhisper]);
 
   /**
-   * Cycle: stop current recorder (triggers onstop → sends to Whisper),
-   * then immediately start a new one on the same stream.
+   * Cycle: stop current recorder → start new one.
+   * Each stop produces a complete audio file for Whisper.
    */
   const cycleRecorder = useCallback(() => {
     if (!isRecordingRef.current || !streamRef.current) return;
 
-    // Stop current (triggers onstop which sends the complete file to Whisper)
     if (recorderRef.current && recorderRef.current.state === 'recording') {
       recorderRef.current.stop();
     }
 
-    // Start new recorder immediately on same stream
     const newRecorder = createAndStartRecorder();
     recorderRef.current = newRecorder;
   }, [createAndStartRecorder]);
 
-  /** Start recording */
+  /** START recording */
   const startRecording = useCallback(async () => {
     setError(null);
+    setLastError(null);
     setCurrentText('');
     textRef.current = '';
     chunkIndexRef.current = 0;
     pendingCountRef.current = 0;
+    setPendingCount(0);
+    setCompletedCount(0);
     transcribedMapRef.current.clear();
 
     try {
@@ -167,12 +186,18 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       });
       streamRef.current = stream;
 
-      // Determine MIME type
-      mimeTypeRef.current = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/ogg;codecs=opus';
+      // Determine best supported MIME type
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeTypeRef.current = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeTypeRef.current = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeTypeRef.current = 'audio/ogg;codecs=opus';
+      } else {
+        setError('Tu navegador no soporta grabación de audio. Usa Chrome o Edge.');
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
 
       isRecordingRef.current = true;
       setIsRecording(true);
@@ -183,10 +208,8 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       const recorder = createAndStartRecorder();
       recorderRef.current = recorder;
 
-      // Cycle every 4 seconds (stop current → send to Whisper → start new)
-      cycleTimerRef.current = setInterval(() => {
-        cycleRecorder();
-      }, 4000);
+      // Cycle every N seconds
+      cycleTimerRef.current = setInterval(cycleRecorder, CYCLE_SECONDS * 1000);
 
       // Duration display
       durationTimerRef.current = setInterval(() => {
@@ -194,14 +217,14 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       }, 1000);
     } catch (err) {
       if (err instanceof Error && err.name === 'NotAllowedError') {
-        setError('Permiso de micrófono denegado. Habilita el micrófono en configuración del navegador.');
+        setError('Permiso de micrófono denegado. Habilita el micrófono en la configuración del navegador.');
       } else {
-        setError('No se pudo acceder al micrófono.');
+        setError('No se pudo acceder al micrófono. Verifica los permisos.');
       }
     }
   }, [createAndStartRecorder, cycleRecorder]);
 
-  /** Stop everything */
+  /** STOP all recording infrastructure */
   const stopAll = useCallback(() => {
     isRecordingRef.current = false;
     setIsRecording(false);
@@ -209,7 +232,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     if (cycleTimerRef.current) { clearInterval(cycleTimerRef.current); cycleTimerRef.current = null; }
     if (durationTimerRef.current) { clearInterval(durationTimerRef.current); durationTimerRef.current = null; }
 
-    // Stop current recorder (sends final chunk to Whisper)
+    // Stop current recorder → sends final chunk
     if (recorderRef.current && recorderRef.current.state === 'recording') {
       recorderRef.current.stop();
     }
@@ -222,15 +245,15 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     }
   }, []);
 
-  /** Save segment */
+  /** SAVE segment */
   const pauseAndSave = useCallback(async () => {
     stopAll();
     setSaving(true);
 
-    // Wait for all pending transcriptions (max 15s)
-    const deadline = Date.now() + 15000;
+    // Wait for pending transcriptions (max 20s)
+    const deadline = Date.now() + 20000;
     while (pendingCountRef.current > 0 && Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 500));
     }
 
     rebuildText();
@@ -240,18 +263,21 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
     if (text) {
       await onSave(text, segDuration);
       setSavedSegments(prev => [...prev, text]);
+    } else {
+      setError('No se capturó texto. Verifica que hablaste cerca del micrófono y que la conexión a internet está activa.');
     }
     setSaving(false);
   }, [stopAll, rebuildText, onSave]);
 
-  /** Cancel */
+  /** CANCEL */
   const cancel = useCallback(() => {
     stopAll();
     transcribedMapRef.current.clear();
     chunkIndexRef.current = 0;
+    setCurrentText('');
   }, [stopAll]);
 
-  // Cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isRecordingRef.current = false;
@@ -271,7 +297,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          {isRecording && (
+          {(isRecording || saving) && (
             <div className="flex items-center gap-1.5 bg-red-500 text-white px-2.5 py-1 rounded-full shadow">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
@@ -281,20 +307,21 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
             </div>
           )}
           <span className="text-sm font-semibold text-gray-800">
-            {saving
-              ? 'Guardando...'
-              : isRecording
-                ? 'Grabando...'
-                : 'Agente IA de Voz'
-            }
+            {saving ? 'Procesando...' : isRecording ? 'Grabando...' : 'Agente IA de Voz'}
           </span>
           {isRecording && (
             <span className="text-xs font-mono bg-white px-2 py-0.5 rounded border">{formatDuration(duration)}</span>
           )}
-          {activeTranscriptions > 0 && (
+          {/* Transcription progress */}
+          {(isRecording || saving) && completedCount > 0 && (
+            <span className="text-[10px] text-green-600 font-medium">
+              ✓ {completedCount} transcrito{completedCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {pendingCount > 0 && (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
               <svg className="w-2.5 h-2.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Procesando
+              {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -331,14 +358,19 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       </div>
 
-      {/* Error */}
+      {/* Errors */}
       {error && <div className="rounded bg-red-50 border border-red-200 p-2"><p className="text-xs text-red-700">{error}</p></div>}
+      {lastError && isRecording && (
+        <div className="rounded bg-yellow-50 border border-yellow-200 p-2">
+          <p className="text-xs text-yellow-700">⚠️ {lastError} — reintentando...</p>
+        </div>
+      )}
 
-      {/* Saving */}
+      {/* Saving indicator */}
       {saving && (
         <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 rounded p-2 border border-blue-200">
           <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-          Esperando transcripciones pendientes y guardando...
+          Procesando fragmentos pendientes y guardando en base de datos...
         </div>
       )}
 
@@ -348,7 +380,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
           <p className="text-sm text-gray-800 whitespace-pre-wrap">
             {currentText || (
               <span className="text-gray-400 italic">
-                {isRecording ? 'Escuchando... el texto aparece progresivamente' : ''}
+                {isRecording ? 'Escuchando... la transcripción aparecerá en unos segundos' : ''}
               </span>
             )}
           </p>
@@ -363,7 +395,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500">🎙️ Transcripción con Whisper IA. El texto se actualiza progresivamente. Habla con naturalidad.</p>
+      <p className="text-[10px] text-gray-500">🎙️ Transcripción con Whisper IA. Habla con naturalidad — el texto se actualiza cada {CYCLE_SECONDS} segundos. Para reuniones largas, adjunta el audio directamente.</p>
     </div>
   );
 }
