@@ -16,8 +16,8 @@ const GROQ_BASE_URL = 'https://api.groq.com/openai/v1/chat/completions';
 /** Maximum time allowed for AI generation (5 minutes). */
 const TIMEOUT_MS = 5 * 60 * 1000;
 
-/** Default model - llama-3.1-8b-instant has higher rate limits on free tier */
-const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+/** Default model - openai/gpt-oss-120b for high quality academic writing */
+const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 
 /**
  * Builds the system prompt for formal academic minute generation.
