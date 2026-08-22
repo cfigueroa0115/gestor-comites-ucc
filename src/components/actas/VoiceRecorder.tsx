@@ -376,7 +376,7 @@ export function VoiceRecorder({ onSave, onFinish }: VoiceRecorderProps) {
 
       {/* Transcription display */}
       {(isRecording || currentText || saving) && (
-        <div className="rounded bg-white border border-gray-200 p-3 min-h-[60px] max-h-[150px] overflow-y-auto">
+        <div className="rounded bg-white border border-gray-200 p-3 min-h-15 max-h-37.5 overflow-y-auto">
           <p className="text-sm text-gray-800 whitespace-pre-wrap">
             {currentText || (
               <span className="text-gray-400 italic">

@@ -17,7 +17,7 @@ export default async function ProtectedLayout({
       <header className="bg-linear-to-r from-ucc-green to-ucc-green-dark text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top bar */}
-          <div className="flex items-center justify-between h-[72px]">
+          <div className="flex items-center justify-between h-18">
             {/* Left: Logo clickable (goes to dashboard) */}
             <Link href="/dashboard" className="flex items-center gap-3 group transition-all duration-300 hover:scale-[1.02]">
               <Image
@@ -72,7 +72,7 @@ export default async function ProtectedLayout({
                   </span>
                 </div>
                 <div className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium text-white truncate max-w-[160px]">
+                  <span className="text-sm font-medium text-white truncate max-w-40">
                     {session.nombreCompleto}
                   </span>
                   <span className="text-[11px] text-green-300 font-medium flex items-center gap-1">
