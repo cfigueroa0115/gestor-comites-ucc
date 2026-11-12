@@ -14,6 +14,7 @@
  * Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6
  */
 
+import { after } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { APP_TIMEZONE } from '@/lib/utils/constants';
 import type { Prisma } from '@prisma/client';
@@ -142,7 +143,15 @@ async function processQueue(): Promise<void> {
 export const auditLogger: IAuditLogger = {
   log(entry: AuditEntry): void {
     queue.push(entry);
-    // Fire-and-forget: trigger processing without awaiting
-    void processQueue();
+    try {
+      // Inside a request (Server Action / Route Handler): schedule the write
+      // with after() so the serverless function is kept alive until the
+      // queue is flushed. Plain fire-and-forget promises can be dropped on
+      // Vercel when the function is frozen right after the response.
+      after(() => processQueue());
+    } catch {
+      // Outside a request scope (tests, scripts): process in background.
+      void processQueue();
+    }
   },
 };
