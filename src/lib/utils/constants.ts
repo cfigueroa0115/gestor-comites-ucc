@@ -185,6 +185,18 @@ export const SESSION_INACTIVITY_TIMEOUT_MINUTES = 30;
 /** Absolute session lifetime in hours. */
 export const SESSION_MAX_LIFETIME_HOURS = 8;
 
+// ---------------------------------------------------------------------------
+// AI Attachment Text Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum characters of extracted text kept per attachment.
+ * Large documents (e.g. 1MB+ DOCX/PDF) produce huge texts that exceed what
+ * React accepts as Server Action arguments and what AI models can take as
+ * context. AI providers only use the first part of each document anyway.
+ */
+export const MAX_ATTACHMENT_TEXT_CHARS = 15000;
+
 /** Maximum consecutive failed login attempts before account lock. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 

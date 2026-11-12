@@ -8,7 +8,7 @@ import { getFileStorage } from '@/lib/services/file-storage.service';
 import { auditLogger } from '@/lib/services/audit.service';
 import { extractText, isUnsupportedMediaType } from '@/lib/services/ai/text-extractor';
 import { prisma } from '@/lib/db/prisma';
-import { DEFAULT_MAX_FILE_SIZE_MB, MEDIA_EXTENSIONS } from '@/lib/utils/constants';
+import { DEFAULT_MAX_FILE_SIZE_MB, MEDIA_EXTENSIONS, MAX_ATTACHMENT_TEXT_CHARS } from '@/lib/utils/constants';
 import type { ActionResult } from '@/types';
 import type { Attachment } from '@prisma/client';
 import type { AllowedExtension } from '@/lib/utils/constants';
@@ -374,7 +374,8 @@ export async function extractFileTextAction(
 
     return {
       success: true,
-      data: extractedText || '',
+      // Cap the text so it can be safely sent back as an action argument
+      data: (extractedText || '').slice(0, MAX_ATTACHMENT_TEXT_CHARS),
     };
   } catch {
     return {

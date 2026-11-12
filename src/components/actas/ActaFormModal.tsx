@@ -8,6 +8,7 @@ import { actaFormSchema, TIPO_COMITE_OPTIONS, AREA_PROGRAMA_OPTIONS } from '@/li
 import { createActaAction } from '@/actions/acta.actions';
 import { saveTranscriptionAction } from '@/actions/voice.actions';
 import { pingSession, SESSION_EXPIRED_MESSAGE } from '@/lib/utils/session-client';
+import { MAX_ATTACHMENT_TEXT_CHARS } from '@/lib/utils/constants';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -249,7 +250,7 @@ function ActaFormModalInner({
             // For text-based files, read content directly on client
             if (file.type === 'text/plain' || file.type === 'text/csv' || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
               const text = await file.text();
-              if (text.trim()) fileTexts.push(text.trim());
+              if (text.trim()) fileTexts.push(text.trim().slice(0, MAX_ATTACHMENT_TEXT_CHARS));
             } else {
               // For other files (PDF, DOCX, XLSX), send to server for extraction
               const formDataUpload = new FormData();

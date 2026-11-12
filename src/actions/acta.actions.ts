@@ -6,7 +6,7 @@ import { actaFormSchema, type ActaFormInput } from '@/lib/validations/acta.schem
 import { listActas, type ActaFilters, type PaginatedActas } from '@/lib/services/acta.service';
 import { prisma } from '@/lib/db/prisma';
 import { auditLogger } from '@/lib/services/audit.service';
-import { COMMITTEE_PREFIXES, APP_TIMEZONE } from '@/lib/utils/constants';
+import { COMMITTEE_PREFIXES, APP_TIMEZONE, MAX_ATTACHMENT_TEXT_CHARS } from '@/lib/utils/constants';
 import { sequenceService } from '@/lib/services/sequence.service';
 import { generateActaContentFromForm } from '@/lib/services/ai';
 import { documentService } from '@/lib/services/document.service';
@@ -256,7 +256,9 @@ export async function createActaAction(
       .filter((t): t is string => t != null && t.trim().length > 0);
 
     // Combine DB texts with any pre-extracted texts passed from the form (local uploads)
-    const inlineTexts = (fileTexts || []).filter(t => t.trim().length > 0);
+    const inlineTexts = (fileTexts || [])
+      .filter(t => t.trim().length > 0)
+      .map(t => t.slice(0, MAX_ATTACHMENT_TEXT_CHARS));
     aiInput.attachmentTexts = [...dbTexts, ...inlineTexts];
 
     // If a voice session ID was provided, fetch transcriptions and append to AI input
