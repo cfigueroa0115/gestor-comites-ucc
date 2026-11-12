@@ -7,6 +7,7 @@ import { VoiceRecorder } from '@/components/actas/VoiceRecorder';
 import { actaFormSchema, TIPO_COMITE_OPTIONS, AREA_PROGRAMA_OPTIONS } from '@/lib/validations/acta.schema';
 import { createActaAction } from '@/actions/acta.actions';
 import { saveTranscriptionAction } from '@/actions/voice.actions';
+import { pingSession, SESSION_EXPIRED_MESSAGE } from '@/lib/utils/session-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -232,6 +233,14 @@ function ActaFormModalInner({
           return;
         }
 
+        // Verify (and refresh) the session before sending files and data.
+        // If it expired, server actions would be redirected to /login and fail
+        // with a generic error, so tell the user exactly what happened.
+        if ((await pingSession()) === 'expired') {
+          setGeneralError(SESSION_EXPIRED_MESSAGE);
+          return;
+        }
+
         // Call server action with the Zod-validated data
         // First, extract text from attached files to pass to the AI
         const fileTexts: string[] = [];
@@ -290,7 +299,13 @@ function ActaFormModalInner({
           setGeneralError(result.error?.message || 'Ocurrió un error inesperado');
         }
       } catch {
-        setGeneralError('Ocurrió un error inesperado. Intente nuevamente.');
+        // Distinguish an expired session from other failures
+        const sessionState = await pingSession();
+        setGeneralError(
+          sessionState === 'expired'
+            ? SESSION_EXPIRED_MESSAGE
+            : 'Ocurrió un error inesperado. Intente nuevamente.',
+        );
       }
     });
   }

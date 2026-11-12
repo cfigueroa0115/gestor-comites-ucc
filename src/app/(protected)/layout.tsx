@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireAuth } from '@/lib/auth/guards';
 import { logoutAction } from '@/actions/auth.actions';
 import { BackButton } from '@/components/ui/BackButton';
+import { SessionKeepAlive } from '@/components/ui/SessionKeepAlive';
 
 export default async function ProtectedLayout({
   children,
@@ -13,6 +14,9 @@ export default async function ProtectedLayout({
 
   return (
     <div className="min-h-screen flex flex-col bg-ucc-gray bg-digital-pattern bg-digital-dots">
+      {/* Keeps the session alive while the user is actively working */}
+      <SessionKeepAlive />
+
       {/* Navigation Header */}
       <header className="bg-linear-to-r from-ucc-green to-ucc-green-dark text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

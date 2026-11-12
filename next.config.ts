@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      // Attachments are sent to Server Actions for text extraction.
+      // Default limit is 1MB; Vercel caps request bodies at 4.5MB.
+      bodySizeLimit: '4mb',
+    },
+  },
   // Include template files in the serverless function bundle
   outputFileTracingIncludes: {
     '/api/**': ['./templates/**'],
